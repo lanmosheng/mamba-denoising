@@ -470,7 +470,7 @@ int main(int argc, char* argv[])
 
 	fscanf(profile, "%d", &numberofmesh);
 
-	gsupmet();
+	gsupmat();
 
 	//read ground truth meshes 
 	printf("read mesh\n");

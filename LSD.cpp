@@ -146,7 +146,7 @@ bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& 
 		return false;
 }
 
-void gsupmet()
+void gsupmat()
 {
 	memset(supmat, 0, sizeof(supmat));
 	//generate i, j and i^2+j^2 

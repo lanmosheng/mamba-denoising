@@ -456,7 +456,7 @@ int main(int argc, char* argv[])
 	std::random_shuffle(traindata.begin(), traindata.end());
 	printf("Total face number: %d\n", traindata.size());
 
-	gsupmet();
+	gsupmat();
 
 
 	int ttx = -1;
