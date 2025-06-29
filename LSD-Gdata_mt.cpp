@@ -1,5 +1,8 @@
 #include"LSD.h"
 
+int supmat[lsdsize][lsdsize][3];
+std::thread td[thread_number];
+float *outputcache;
 float *gtcache;
 
 struct pid

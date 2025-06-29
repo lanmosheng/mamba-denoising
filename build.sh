@@ -29,7 +29,7 @@ compile_app() {
     local source_file=$2
     
     echo "编译 ${app_name}..."
-    g++ -std=c++11 ${source_file} \
+    g++ -std=c++11 ${source_file} LSD.cpp \
         -I . \
         -I "${OPENMESH_INCLUDE}" \
         -I "${EIGEN_PATH}" \

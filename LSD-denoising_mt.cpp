@@ -1,5 +1,8 @@
 #include"LSD.h"
 
+int supmat[lsdsize][lsdsize][3];
+std::thread td[thread_number];
+float *outputcache;
 struct pid
 {
 	int index;
@@ -16,7 +19,7 @@ struct pid
 	}
 };
 std::vector<pid> thread_p[thread_number];
-
+const int filesize = 10000;
 double sigma_s = 0;
 std::vector<ring> ringlist;
 TriMesh noisemesh;
@@ -280,24 +283,7 @@ void updateVertexPosition(TriMesh &mesh, std::vector<TriMesh::Normal> &filtered_
 			mesh.set_point(*v_it, new_points[v_it->idx()]);
 	}
 }
-void gsupmet()
-{
-	memset(supmat, 0, sizeof(supmat));
-	//generate i, j and i^2+j^2 
-	for (int i = 0; i < lsdsize; i++)
-		for (int j = 0; j < lsdsize; j++)
-		{
 
-		int zi = i - lsdsize / 2;
-
-		int zj = j - lsdsize / 2;
-		supmat[i][j][2] = zi * zi + zj * zj;
-		supmat[i][j][0] = zi;
-		supmat[i][j][1] = zj;
-
-		}
-	return;
-}
 int preprocessing()
 {
 	ringlist.resize(noisemesh.n_faces());
