@@ -1,0 +1,10 @@
+model/*
+premodel
+stest/*
+strain/*
+thirdparty/*
+
+!model/.gitkeep
+!stest/.gitkeep
+!strain/.gitkeep
+!thirdparty/.gitkeep
