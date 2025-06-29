@@ -4,6 +4,19 @@ stest/*
 strain/*
 thirdparty/*
 
+*.pt
+*.ckpt
+*.npy
+*.npz
+*.h5
+*.pkl
+*.onnx
+
+**/__pycache__/
+*.py[cod]
+
+
+
 !model/.gitkeep
 !stest/.gitkeep
 !strain/.gitkeep
