@@ -17,6 +17,7 @@ thirdparty/*
 
 LSD-denoising_mt
 LSD-Gdata_mt
+*.txt
 
 
 !model/.gitkeep
