@@ -153,14 +153,11 @@ void gsupmet()
 	for (int i = 0; i < lsdsize; i++)
 		for (int j = 0; j < lsdsize; j++)
 		{
-
-		int zi = i - lsdsize / 2;
-
-		int zj = j - lsdsize / 2;
-		supmat[i][j][2] = zi * zi + zj * zj;
-		supmat[i][j][0] = zi;
-		supmat[i][j][1] = zj;
-
+			int zi = i - lsdsize / 2;
+			int zj = j - lsdsize / 2;
+			supmat[i][j][2] = zi * zi + zj * zj;
+			supmat[i][j][0] = zi;
+			supmat[i][j][1] = zj;
 		}
 	return;
 }
