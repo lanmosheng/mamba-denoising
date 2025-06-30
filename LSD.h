@@ -74,3 +74,17 @@ TriMesh::Normal getAveNormal(
     const std::vector<TriMesh::Normal> &noisy_normals, 
     int current_flag,
     const std::vector<int>& flagz);
+
+TriMesh::Normal getPolarAxis(TriMesh& mesh, int face_index, const std::vector<TriMesh::Point>& face_centroid);
+
+int samplingNormal(
+	TriMesh& mesh,
+    int index,
+	const Eigen::Matrix3d& d2,
+    const TriMesh::Normal& startnormal,
+    const std::vector<TriMesh::Point>& face_centroid,
+    const std::vector<TriMesh::Normal>& noisy_normals,
+    std::vector<line>& halfedgeset,
+    double sigma_s,
+    int lsdsize,
+    float* outputmat);
