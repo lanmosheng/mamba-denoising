@@ -183,3 +183,20 @@ TriMesh::Normal getAveNormal(
     a1.normalize();
     return a1;
 }
+
+
+TriMesh::Normal getPolarAxis(const TriMesh& mesh, int face_index, const std::vector<TriMesh::Point>& face_centroid)
+{
+	TriMesh::Point startpoint(0, 0, 0);
+    int cc = 0;
+
+    for (TriMesh::FaceVertexIter it = mesh.fv_begin(TriMesh::FaceHandle(face_index)); cc <= 1; cc++, it++) {
+        startpoint += mesh.point(*it);
+    }
+
+    startpoint /= 2.0;
+    TriMesh::Normal startnormal = startpoint - face_centroid[face_index];
+    startnormal.normalize();
+
+    return startnormal;
+}

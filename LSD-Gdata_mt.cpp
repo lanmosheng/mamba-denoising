@@ -69,15 +69,17 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[lsdsize*lsdsize*3], float gr
 	a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
 
 	//obtain polar axis
-	TriMesh::Point startpoint(0, 0, 0);
-	int cc = 0;
-	for (TriMesh::FaceVertexIter it = mesh2.fv_begin(TriMesh::FaceHandle(index)); cc <= 1; cc++, it++)
-	{
-		startpoint += mesh2.point(*it);
-	}
-	startpoint /= 2;
-	TriMesh::Normal startnormal = startpoint - face_centroid[index];
-	startnormal.normalize();
+	// TriMesh::Point startpoint(0, 0, 0);
+	// int cc = 0;
+	// for (TriMesh::FaceVertexIter it = mesh2.fv_begin(TriMesh::FaceHandle(index)); cc <= 1; cc++, it++)
+	// {
+	// 	startpoint += mesh2.point(*it);
+	// }
+	// startpoint /= 2;
+	// TriMesh::Normal startnormal = startpoint - face_centroid[index];
+	// startnormal.normalize();
+
+	TriMesh::Normal startnormal = getPolarAxis(mesh2, index, face_centroid)
 
 
 	//obtain rotation matrix and rotated ground truth

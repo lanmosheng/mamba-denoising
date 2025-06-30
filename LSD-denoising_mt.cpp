@@ -56,16 +56,16 @@ int gLSD(int index, float outputmat[lsdsize*lsdsize * 3])
 	a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
 
 	//obtain polar axis
-	TriMesh::Point startpoint(0, 0, 0);
-	int cc = 0;
-	for (TriMesh::FaceVertexIter it = noisemesh.fv_begin(TriMesh::FaceHandle(index)); cc <= 1; cc++, it++)
-	{
-		startpoint += noisemesh.point(*it);
-	}
-	startpoint /= 2;
-	TriMesh::Normal startnormal = startpoint - face_centroid[index];
-	startnormal.normalize();
-
+	// TriMesh::Point startpoint(0, 0, 0);
+	// int cc = 0;
+	// for (TriMesh::FaceVertexIter it = noisemesh.fv_begin(TriMesh::FaceHandle(index)); cc <= 1; cc++, it++)
+	// {
+	// 	startpoint += noisemesh.point(*it);
+	// }
+	// startpoint /= 2;
+	// TriMesh::Normal startnormal = startpoint - face_centroid[index];
+	// startnormal.normalize();
+	TriMesh::Normal startnormal = getPolarAxis(noisemesh, index, face_centroid);
 
 	//obtain rotation matrix and inverse rotation matrix             
 	Eigen::Matrix3d d2(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(a1.data()[0],
