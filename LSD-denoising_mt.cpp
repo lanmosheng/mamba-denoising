@@ -36,22 +36,24 @@ int gLSD(int index, float outputmat[lsdsize*lsdsize * 3])
 {
 	TriMesh::Normal a1(0, 0, 0);
 
-	//obtain n*
-	for (int ii = 0; ii < ringlist[index].totalring[1].size(); ii++)
-	{
+	// //obtain n*
+	// for (int ii = 0; ii < ringlist[index].totalring[1].size(); ii++)
+	// {
 
-		if (flagz[index] < 0)
-		{
-			if (flagz[ringlist[index].totalring[1][ii]] < 0)
-				a1 += noisy_normals[ringlist[index].totalring[1][ii]];
-		}
-		else
-		{
-			a1 += noisy_normals[ringlist[index].totalring[1][ii]];
-		}
+	// 	if (flagz[index] < 0)
+	// 	{
+	// 		if (flagz[ringlist[index].totalring[1][ii]] < 0)
+	// 			a1 += noisy_normals[ringlist[index].totalring[1][ii]];
+	// 	}
+	// 	else
+	// 	{
+	// 		a1 += noisy_normals[ringlist[index].totalring[1][ii]];
+	// 	}
 
-	}
-	a1.normalize();
+	// }
+	// a1.normalize();
+
+	a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
 
 	//obtain polar axis
 	TriMesh::Point startpoint(0, 0, 0);
@@ -65,7 +67,7 @@ int gLSD(int index, float outputmat[lsdsize*lsdsize * 3])
 	startnormal.normalize();
 
 
-	//obtain rotation matrix and inverse rotation matrix
+	//obtain rotation matrix and inverse rotation matrix             
 	Eigen::Matrix3d d2(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(a1.data()[0],
 		a1.data()[1],
 		a1.data()[2]), Eigen::Vector3d(1, 0, 0)));

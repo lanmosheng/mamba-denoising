@@ -68,3 +68,9 @@ bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& 
 	TriMesh::Point& line2Point1, TriMesh::Point& line2Point2, TriMesh::Point& resultSegmentPoint, TriMesh::Normal& nownormal);
 
 void gsupmat();
+
+TriMesh::Normal getAveNormal(
+    const ring& cur_ring, 
+    const std::vector<TriMesh::Normal> &noisy_normals, 
+    int current_flag,
+    const std::vector<int>& flagz);

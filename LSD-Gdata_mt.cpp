@@ -50,22 +50,23 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[lsdsize*lsdsize*3], float gr
 
 	TriMesh::Normal a1(0, 0, 0);
 
-	//obtain n*
-	for (int ii = 0; ii < ringlist[index].totalring[1].size(); ii++)
-	{
+	// //obtain n*
+	// for (int ii = 0; ii < ringlist[index].totalring[1].size(); ii++)
+	// {
 
-		if (flagz[index] < 0)
-		{
-			if (flagz[ringlist[index].totalring[1][ii]] < 0)
-				a1 += noisy_normals[ringlist[index].totalring[1][ii]];
-		}
-		else
-		{
-			a1 += noisy_normals[ringlist[index].totalring[1][ii]];
-		}
+	// 	if (flagz[index] < 0)
+	// 	{
+	// 		if (flagz[ringlist[index].totalring[1][ii]] < 0)
+	// 			a1 += noisy_normals[ringlist[index].totalring[1][ii]];
+	// 	}
+	// 	else
+	// 	{
+	// 		a1 += noisy_normals[ringlist[index].totalring[1][ii]];
+	// 	}
 
-	}
-	a1.normalize();
+	// }
+
+	a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
 
 	//obtain polar axis
 	TriMesh::Point startpoint(0, 0, 0);
