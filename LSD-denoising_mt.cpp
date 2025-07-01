@@ -18,8 +18,10 @@ struct pid
 		count = c;
 	}
 };
-std::vector<pid> thread_p[thread_number];
 const int filesize = 10000;
+
+std::vector<pid> thread_p[thread_number];
+
 double sigma_s = 0;
 std::vector<ring> ringlist;
 TriMesh noisemesh;
@@ -27,9 +29,10 @@ std::vector<line> halfedgeset;
 std::vector<TriMesh::Normal> noisy_normals;
 std::vector<TriMesh::Point> face_centroid;
 std::vector<TriMesh::Normal> filtered_normals;
+std::vector<int> flagz;
+
 std::vector<Eigen::Matrix3d> msave;
 std::vector<int> errorflag;
-std::vector<int> flagz;
 std::vector<FILE*> filepo;
 
 int gLSD(int index, float outputmat[lsdsize*lsdsize * 3])

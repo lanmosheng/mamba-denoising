@@ -3,8 +3,8 @@
 int supmat[lsdsize][lsdsize][3];
 std::thread td[thread_number];
 float *outputcache;
-float *gtcache;
 
+float *gtcache;
 struct pid
 {
 	int index;
@@ -23,17 +23,17 @@ struct pid
 		count = c;
 	}
 };
+std::vector<TriMesh> meshlist;
+
 std::vector<pid> thread_p[thread_number];
 
-
-std::vector<TriMesh> meshlist;
-std::vector<TriMesh> noisemeshlist;
 std::vector<double> sigma_s_list;
 std::vector<std::vector<ring>> ringlist_list;
-std::vector<std::vector<TriMesh::Normal>> filtered_normals_list;
+std::vector<TriMesh> noisemeshlist;
 std::vector<std::vector<line>> halfedgeset_list;
 std::vector<std::vector<TriMesh::Normal>> noisy_normals_list;
 std::vector<std::vector<TriMesh::Point>> face_centroid_list;
+std::vector<std::vector<TriMesh::Normal>> filtered_normals_list;
 std::vector<std::vector<int>> flagz_list;
 
 int gLSD(int index, TriMesh &mesh2, float outputmat[lsdsize*lsdsize*3], float groundtruth[3],
