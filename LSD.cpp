@@ -382,3 +382,46 @@ int samplingNormal(
 		}
 	}
 }
+
+std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, const int n_faces){
+	std::unordered_set<int> visited;
+	std::vector<int> ret;
+	
+	auto bfs = [&](int start){
+		std::queue<int> q;
+		q.push(start);
+		visited.insert(start);
+
+		while(!q.empty()){
+			int cur = q.front();
+			q.pop();
+			ret.push_back(cur);
+
+			for(TriMesh::FaceFaceIter ff_it = mesh.ff_begin(TriMesh::FaceHandle(cur)); ff_it.is_valid(); ff_it++){
+				int nxt = ff_it -> idx();
+				if(!visited.count(nxt)){
+					visited.insert(nxt);
+					q.push(nxt);
+				}
+			}
+		}
+	};
+
+
+	for(int i = 0; i < n_faces; i++){
+		if(visited.count(i)) continue;
+		if(flagz[i] < 0) continue;
+		bfs(i);
+	}
+
+	for(int i = 0; i < n_faces; i++){
+		if(visited.count(i)) continue;
+		bfs(i);
+	}
+
+	if (ret.size() != n_faces) {
+		std::cerr << "Warning: not all faces included in sampling!" << std::endl;
+	}
+
+	return ret;
+}

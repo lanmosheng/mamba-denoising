@@ -323,32 +323,55 @@ int main(int argc, char* argv[])
 				thread_p[k1].clear();
 			//write the LSD of all the faces to files
 			int n_faces = noisemesh.n_faces();
-			for (int iterf = 0; iterf < n_faces;)
-			{
-				thread_p[count%thread_number].push_back(pid(iterf, count));
+			std::vector<int> sorted_face_order = globalSampling(noisemesh, flagz, n_faces);
+			// for (int iterf = 0; iterf < n_faces;)
+			// {
+			// 	thread_p[count%thread_number].push_back(pid(iterf, count));
+			// 	count++;
+			// 	iterf++;
+			// 	if (count == filesize || iterf == n_faces)
+			// 	{
+			// 		for (int k2 = 0; k2 < thread_number; k2++)
+			// 		{
+			// 			td[k2] = std::thread(threadprocess, k2);
+			// 		}
+			// 		for (int k2 = 0; k2 < thread_number; k2++)
+			// 		{
+			// 			td[k2].join();
+			// 		}
+			// 		fwrite(outputcache, sizeof(float), count * lsdsize*lsdsize * 3, filepo[fcount]);
+
+			// 		count = 0;
+			// 		fcount++;
+
+			// 		memset(outputcache, 0, filesize * lsdsize*lsdsize * 3 * sizeof(float));
+			// 		for (int k1 = 0; k1 < thread_number; k1++)
+			// 			thread_p[k1].clear();
+			// 	}
+
+
+			// }
+
+			for(int i = 0; i < n_faces; i++){
+				int face_idx = sorted_face_order[i];
+				thread_p[count % thread_number].push_back(pid(face_idx, count));
 				count++;
-				iterf++;
-				if (count == filesize || iterf == n_faces)
-				{
-					for (int k2 = 0; k2 < thread_number; k2++)
-					{
+
+				if(count == filesize || i == n_faces - 1){
+					for(int k2 = 0; k2 < thread_number; k2++){
 						td[k2] = std::thread(threadprocess, k2);
 					}
-					for (int k2 = 0; k2 < thread_number; k2++)
-					{
+					for(int k2 = 0; k2 < thread_number; k2++){
 						td[k2].join();
 					}
-					fwrite(outputcache, sizeof(float), count * lsdsize*lsdsize * 3, filepo[fcount]);
+					fwrite(outputcache, sizeof(float), count * lsdsize * lsdsize * 3, filepo[fcount]);
 
 					count = 0;
 					fcount++;
-
-					memset(outputcache, 0, filesize * lsdsize*lsdsize * 3 * sizeof(float));
+					memset(outputcache, 0, filesize * lsdsize * lsdsize * 3 * sizeof(float));
 					for (int k1 = 0; k1 < thread_number; k1++)
 						thread_p[k1].clear();
 				}
-
-
 			}
 
 			closeall(filepo);
