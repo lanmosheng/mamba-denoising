@@ -69,6 +69,69 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[lsdsize*lsdsize*3], float gr
 	return err;
 }
 
+int preprocessing(
+    TriMesh& mesh,               // GT mesh
+    TriMesh& noisemesh,          // noisy mesh
+    std::vector<ring>& ringlist,
+    std::vector<TriMesh::Normal>& noisy_normals,
+    std::vector<TriMesh::Normal>& filtered_normals,
+    std::vector<TriMesh::Point>& face_centroid,
+    std::vector<line>& halfedgeset,
+    std::vector<int>& flagz,
+    double& sigma_s,
+    std::vector<std::pair<int, int>>& traindata,
+    int nom)
+{
+	// ringlist_list[nom].resize(meshlist[nom].n_faces());
+	// noisy_normals_list[nom].resize(meshlist[nom].n_faces());
+	// face_centroid_list[nom].resize(meshlist[nom].n_faces());
+	// filtered_normals_list[nom].resize(meshlist[nom].n_faces());
+	// halfedgeset_list[nom].resize(noisemeshlist[nom].n_halfedges());
+	// for (TriMesh::HalfedgeIter it = noisemeshlist[nom].halfedges_begin(); it != noisemeshlist[nom].halfedges_end(); it++)
+	// {
+	// 	halfedgeset_list[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
+	// 	halfedgeset_list[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
+	// }
+
+	// makeRing(meshlist[nom], ringlist_list[nom], 3);
+	// getFaceNormal(meshlist[nom], filtered_normals_list[nom]);
+	// getFaceNormal(noisemeshlist[nom], noisy_normals_list[nom]);
+	// getFaceCentroid(noisemeshlist[nom], face_centroid_list[nom]);
+	// sigma_s_list[nom] = getSigmaS(2, face_centroid_list[nom], noisemeshlist[nom]) / 8;
+	// markBoundaryFaces(meshlist[nom], flagz_list[nom]);
+	
+	// //obtain d_a/p_s
+	// for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++){
+	// 	int index = v_it -> idx();
+	// 	traindata.push_back(std::pair<int, int>(nom, index));
+	// }
+
+	ringlist.resize(mesh.n_faces());
+    noisy_normals.resize(mesh.n_faces());
+    face_centroid.resize(mesh.n_faces());
+    filtered_normals.resize(mesh.n_faces());
+    halfedgeset.resize(noisemesh.n_halfedges());
+
+    for (TriMesh::HalfedgeIter it = noisemesh.halfedges_begin(); it != noisemesh.halfedges_end(); ++it) {
+        halfedgeset[it->idx()].v1 = noisemesh.point(noisemesh.from_vertex_handle(*it));
+        halfedgeset[it->idx()].v2 = noisemesh.point(noisemesh.to_vertex_handle(*it));
+    }
+
+    makeRing(mesh, ringlist, 3);
+    getFaceNormal(mesh, filtered_normals);
+    getFaceNormal(noisemesh, noisy_normals);
+    getFaceCentroid(noisemesh, face_centroid);
+    sigma_s = getSigmaS(2, face_centroid, noisemesh) / 8;
+    markBoundaryFaces(mesh, flagz);
+
+    for (TriMesh::FaceIter v_it = mesh.faces_begin(); v_it != mesh.faces_end(); ++v_it) {
+        int index = v_it->idx();
+        traindata.push_back(std::pair<int, int>(nom, index));
+    }
+
+	return 0;
+}
+
 void threadprocess(int p)
 {
 	for (int i = 0; i < thread_p[p].size(); i++)
@@ -99,7 +162,9 @@ int main(int argc, char* argv[])
 		printf("profile error\n");
 		return 0;
 	}
+
 	fscanf(profile, "%d", &numberofmesh);
+
 	meshlist.resize(numberofmesh);
 	noisemeshlist.resize(numberofmesh);
 	sigma_s_list.resize(numberofmesh);
@@ -129,10 +194,10 @@ int main(int argc, char* argv[])
 			return 0;
 		}
 
-		ringlist_list[nom].resize(meshlist[nom].n_faces());
-		noisy_normals_list[nom].resize(meshlist[nom].n_faces());
-		face_centroid_list[nom].resize(meshlist[nom].n_faces());
-		filtered_normals_list[nom].resize(meshlist[nom].n_faces());
+		// ringlist_list[nom].resize(meshlist[nom].n_faces());
+		// noisy_normals_list[nom].resize(meshlist[nom].n_faces());
+		// face_centroid_list[nom].resize(meshlist[nom].n_faces());
+		// filtered_normals_list[nom].resize(meshlist[nom].n_faces());
 	}
 	//read noisy meshes 
 	for (int nom = 0; nom < numberofmesh; nom++)
@@ -144,12 +209,12 @@ int main(int argc, char* argv[])
 			printf("data error");
 			return 0;
 		}
-		halfedgeset_list[nom].resize(noisemeshlist[nom].n_halfedges());
-		for (TriMesh::HalfedgeIter it = noisemeshlist[nom].halfedges_begin(); it != noisemeshlist[nom].halfedges_end(); it++)
-		{
-			halfedgeset_list[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
-			halfedgeset_list[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
-		}
+		// halfedgeset_list[nom].resize(noisemeshlist[nom].n_halfedges());
+		// for (TriMesh::HalfedgeIter it = noisemeshlist[nom].halfedges_begin(); it != noisemeshlist[nom].halfedges_end(); it++)
+		// {
+		// 	halfedgeset_list[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
+		// 	halfedgeset_list[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
+		// }
 		if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
 		{
 			printf("data error");
@@ -188,17 +253,17 @@ int main(int argc, char* argv[])
 	//Make ring, get ground truth normal, noisy normal, face centroid, sigma_s
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
-		makeRing(meshlist[nom], ringlist_list[nom], 3);
-		getFaceNormal(meshlist[nom], filtered_normals_list[nom]);
-		getFaceNormal(noisemeshlist[nom], noisy_normals_list[nom]);
-		getFaceCentroid(noisemeshlist[nom], face_centroid_list[nom]);
-		sigma_s_list[nom] = getSigmaS(2, face_centroid_list[nom], noisemeshlist[nom]) / 8;
-		markBoundaryFaces(meshlist[nom], flagz_list[nom]);
-		//obtain d_a/p_s
-		for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++){
-			int index = v_it -> idx();
-			traindata.push_back(std::pair<int, int>(nom, index));
-		}
+		// makeRing(meshlist[nom], ringlist_list[nom], 3);
+		// getFaceNormal(meshlist[nom], filtered_normals_list[nom]);
+		// getFaceNormal(noisemeshlist[nom], noisy_normals_list[nom]);
+		// getFaceCentroid(noisemeshlist[nom], face_centroid_list[nom]);
+		// sigma_s_list[nom] = getSigmaS(2, face_centroid_list[nom], noisemeshlist[nom]) / 8;
+		// markBoundaryFaces(meshlist[nom], flagz_list[nom]);
+		// //obtain d_a/p_s
+		// for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++){
+		// 	int index = v_it -> idx();
+		// 	traindata.push_back(std::pair<int, int>(nom, index));
+		// }
 	}
 	
 	std::random_shuffle(traindata.begin(), traindata.end());
