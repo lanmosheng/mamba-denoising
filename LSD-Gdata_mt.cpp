@@ -31,7 +31,7 @@ std::vector<TriMesh> noisemeshlist;
 std::vector<double> sigma_s;
 std::vector<std::vector<ring>> ringlist;
 std::vector<std::vector<TriMesh::Normal>> filtered_normals;
-std::vector<std::vector<line>> halfedgeset;
+std::vector<std::vector<line>> halfedgesets;
 std::vector<std::vector<TriMesh::Normal>> noisy_normals;
 std::vector<std::vector<TriMesh::Point>> face_centroid;
 std::vector<std::vector<int>> flagz;
@@ -77,7 +77,7 @@ void threadprocess(int p)
 		int meshidx = thread_p[p][i].meshindex;
 		int count = thread_p[p][i].count;
 
-		gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s[meshidx], ringlist[meshidx], filtered_normals[meshidx], halfedgeset[meshidx], noisy_normals[meshidx], face_centroid[meshidx], flagz[meshidx]);
+		gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s[meshidx], ringlist[meshidx], filtered_normals[meshidx], halfedgesets[meshidx], noisy_normals[meshidx], face_centroid[meshidx], flagz[meshidx]);
 
 	}
 
@@ -105,7 +105,7 @@ int main(int argc, char* argv[])
 	sigma_s.resize(numberofmesh);
 	ringlist.resize(numberofmesh);
 	filtered_normals.resize(numberofmesh);
-	halfedgeset.resize(numberofmesh);
+	halfedgesets.resize(numberofmesh);
 	noisy_normals.resize(numberofmesh);
 	face_centroid.resize(numberofmesh);
 	flagz.resize(numberofmesh);
@@ -144,11 +144,11 @@ int main(int argc, char* argv[])
 			printf("data error");
 			return 0;
 		}
-		halfedgeset[nom].resize(noisemeshlist[nom].n_halfedges());
+		halfedgesets[nom].resize(noisemeshlist[nom].n_halfedges());
 		for (TriMesh::HalfedgeIter it = noisemeshlist[nom].halfedges_begin(); it != noisemeshlist[nom].halfedges_end(); it++)
 		{
-			halfedgeset[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
-			halfedgeset[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
+			halfedgesets[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
+			halfedgesets[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
 		}
 		if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
 		{
@@ -289,7 +289,7 @@ int main(int argc, char* argv[])
 				int index = traindata[ttx].second;
 				int meshidx = traindata[ttx].first;
 
-				if (gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s[meshidx], ringlist[meshidx], filtered_normals[meshidx], halfedgeset[meshidx], noisy_normals[meshidx], face_centroid[meshidx], flagz[meshidx]) == -4)
+				if (gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s[meshidx], ringlist[meshidx], filtered_normals[meshidx], halfedgesets[meshidx], noisy_normals[meshidx], face_centroid[meshidx], flagz[meshidx]) == -4)
 					continue;
 				else
 					k1++;
