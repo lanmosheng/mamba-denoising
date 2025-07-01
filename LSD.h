@@ -90,3 +90,5 @@ int samplingNormal(
     float* outputmat);
 
 std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, const int n_faces);
+
+void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz);

@@ -113,55 +113,9 @@ int preprocessing()
 	getFaceNormal(noisemesh, noisy_normals);
 	getFaceCentroid(noisemesh, face_centroid);
 	sigma_s = getSigmaS(2, face_centroid, noisemesh) / 8;
-	flagz.resize(noisemesh.n_faces());
-	for (TriMesh::FaceIter v_it = noisemesh.faces_begin(); v_it != noisemesh.faces_end(); v_it++)
-	{
-		int index = v_it->idx();
-		flagz[index] = 0;
-	}
-	for (TriMesh::FaceIter v_it = noisemesh.faces_begin(); v_it != noisemesh.faces_end(); v_it++)
-	{
-		int index = v_it->idx();
-		int count = 0;
-		for (TriMesh::FaceFaceIter ff_it = noisemesh.ff_begin(TriMesh::FaceHandle(*v_it)); ff_it.is_valid(); ff_it++)
-			count++;
-		if (count <= 2)
-		{
-			flagz[index] = -1;
-		}
-	} //find the faces on the boundary and mark them with -1
-	for (TriMesh::FaceIter v_it = noisemesh.faces_begin(); v_it != noisemesh.faces_end(); v_it++)
-	{
+	
+	markBoundaryFaces(noisemesh, flagz);
 
-		int index = v_it->idx();
-		if (flagz[index] <= -1)
-			continue;
-		for (TriMesh::FaceVertexIter fv_it = noisemesh.fv_begin(TriMesh::FaceHandle(index)); fv_it.is_valid(); fv_it++)
-		{
-
-			for (TriMesh::VertexFaceIter vf_it = noisemesh.vf_begin(*fv_it); vf_it.is_valid(); vf_it++)
-			{
-				if (flagz[vf_it->idx()] == -1)
-				{
-					flagz[index] = -2;
-					break;
-				}
-			}
-			if (flagz[index] == -2)
-				break;
-		}
-
-	} //find the faces that their neighbours are on the boundary, and mark them with -2
-
-
-	for (TriMesh::FaceIter v_it = noisemesh.faces_begin(); v_it != noisemesh.faces_end(); v_it++)
-	{
-		int index = v_it->idx();
-		if (flagz[index] == -2)
-		{
-			flagz[index] = -1;
-		}
-	}
 	return 0;
 }
 

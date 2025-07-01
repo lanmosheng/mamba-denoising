@@ -28,13 +28,13 @@ std::vector<pid> thread_p[thread_number];
 
 std::vector<TriMesh> meshlist;
 std::vector<TriMesh> noisemeshlist;
-std::vector<double> sigma_s;
-std::vector<std::vector<ring>> ringlist;
-std::vector<std::vector<TriMesh::Normal>> filtered_normals;
-std::vector<std::vector<line>> halfedgesets;
-std::vector<std::vector<TriMesh::Normal>> noisy_normals;
-std::vector<std::vector<TriMesh::Point>> face_centroid;
-std::vector<std::vector<int>> flagz;
+std::vector<double> sigma_s_list;
+std::vector<std::vector<ring>> ringlist_list;
+std::vector<std::vector<TriMesh::Normal>> filtered_normals_list;
+std::vector<std::vector<line>> halfedgeset_list;
+std::vector<std::vector<TriMesh::Normal>> noisy_normals_list;
+std::vector<std::vector<TriMesh::Point>> face_centroid_list;
+std::vector<std::vector<int>> flagz_list;
 
 int gLSD(int index, TriMesh &mesh2, float outputmat[lsdsize*lsdsize*3], float groundtruth[3],
 	double sigma_s,
@@ -77,7 +77,7 @@ void threadprocess(int p)
 		int meshidx = thread_p[p][i].meshindex;
 		int count = thread_p[p][i].count;
 
-		gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s[meshidx], ringlist[meshidx], filtered_normals[meshidx], halfedgesets[meshidx], noisy_normals[meshidx], face_centroid[meshidx], flagz[meshidx]);
+		gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]);
 
 	}
 
@@ -102,13 +102,13 @@ int main(int argc, char* argv[])
 	fscanf(profile, "%d", &numberofmesh);
 	meshlist.resize(numberofmesh);
 	noisemeshlist.resize(numberofmesh);
-	sigma_s.resize(numberofmesh);
-	ringlist.resize(numberofmesh);
-	filtered_normals.resize(numberofmesh);
-	halfedgesets.resize(numberofmesh);
-	noisy_normals.resize(numberofmesh);
-	face_centroid.resize(numberofmesh);
-	flagz.resize(numberofmesh);
+	sigma_s_list.resize(numberofmesh);
+	ringlist_list.resize(numberofmesh);
+	filtered_normals_list.resize(numberofmesh);
+	halfedgeset_list.resize(numberofmesh);
+	noisy_normals_list.resize(numberofmesh);
+	face_centroid_list.resize(numberofmesh);
+	flagz_list.resize(numberofmesh);
 
 	std::vector<std::pair<int, int>> traindata;
 
@@ -129,10 +129,10 @@ int main(int argc, char* argv[])
 			return 0;
 		}
 
-		ringlist[nom].resize(meshlist[nom].n_faces());
-		noisy_normals[nom].resize(meshlist[nom].n_faces());
-		face_centroid[nom].resize(meshlist[nom].n_faces());
-		filtered_normals[nom].resize(meshlist[nom].n_faces());
+		ringlist_list[nom].resize(meshlist[nom].n_faces());
+		noisy_normals_list[nom].resize(meshlist[nom].n_faces());
+		face_centroid_list[nom].resize(meshlist[nom].n_faces());
+		filtered_normals_list[nom].resize(meshlist[nom].n_faces());
 	}
 	//read noisy meshes 
 	for (int nom = 0; nom < numberofmesh; nom++)
@@ -144,11 +144,11 @@ int main(int argc, char* argv[])
 			printf("data error");
 			return 0;
 		}
-		halfedgesets[nom].resize(noisemeshlist[nom].n_halfedges());
+		halfedgeset_list[nom].resize(noisemeshlist[nom].n_halfedges());
 		for (TriMesh::HalfedgeIter it = noisemeshlist[nom].halfedges_begin(); it != noisemeshlist[nom].halfedges_end(); it++)
 		{
-			halfedgesets[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
-			halfedgesets[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
+			halfedgeset_list[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
+			halfedgeset_list[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
 		}
 		if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
 		{
@@ -183,80 +183,24 @@ int main(int argc, char* argv[])
 	gtcache = new float[px[4] * 3];
 	memset(outputcache, 0, px[4] * lsdsize*lsdsize * 3 * sizeof(float));
 	memset(gtcache, 0, px[4] * 3*sizeof(float));
-
-
+	
+	
 	//Make ring, get ground truth normal, noisy normal, face centroid, sigma_s
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
-		makeRing(meshlist[nom], ringlist[nom], 3);
-		getFaceNormal(meshlist[nom], filtered_normals[nom]);
-		getFaceNormal(noisemeshlist[nom], noisy_normals[nom]);
-		getFaceCentroid(noisemeshlist[nom], face_centroid[nom]);
-		sigma_s[nom] = getSigmaS(2, face_centroid[nom], noisemeshlist[nom]) / 8;
+		makeRing(meshlist[nom], ringlist_list[nom], 3);
+		getFaceNormal(meshlist[nom], filtered_normals_list[nom]);
+		getFaceNormal(noisemeshlist[nom], noisy_normals_list[nom]);
+		getFaceCentroid(noisemeshlist[nom], face_centroid_list[nom]);
+		sigma_s_list[nom] = getSigmaS(2, face_centroid_list[nom], noisemeshlist[nom]) / 8;
+		markBoundaryFaces(meshlist[nom], flagz_list[nom]);
 		//obtain d_a/p_s
-	}
-
-
-	//flagz=0: the face is far from the boundary
-	//flagz=-1: the face is close to the boundary
-
-	for (int nom = 0; nom < numberofmesh; nom++)
-	{
-
-		flagz[nom].resize(meshlist[nom].n_faces());
-		for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++)
-		{
-			int index = v_it->idx();
-			flagz[nom][index] = 0;
-		}
-		for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++)
-		{
-			int index = v_it->idx();
-			int count = 0;
-			for (TriMesh::FaceFaceIter ff_it = meshlist[nom].ff_begin(TriMesh::FaceHandle(*v_it)); ff_it.is_valid(); ff_it++)
-				count++;
-			if (count <= 2)
-			{
-				flagz[nom][index] = -1;
-			}
-		} //find the faces on the boundary and mark them with -1
-
-
-		for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++)
-		{
-
-			int index = v_it->idx();
-			if (flagz[nom][index] <= -1)
-				continue;
-			for (TriMesh::FaceVertexIter fv_it = meshlist[nom].fv_begin(TriMesh::FaceHandle(index)); fv_it.is_valid(); fv_it++)
-			{
-
-				for (TriMesh::VertexFaceIter vf_it = meshlist[nom].vf_begin(*fv_it); vf_it.is_valid(); vf_it++)
-				{
-					if (flagz[nom][vf_it->idx()] == -1)
-					{
-						flagz[nom][index] = -2;
-						break;
-					}
-				}
-				if (flagz[nom][index] == -2)
-					break;
-			}
-
-		} //find the faces that their neighbours are on the boundary, and mark them with -2
-
-
-		for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++)
-		{
-			int index = v_it->idx();
-			if (flagz[nom][index] == -2)
-			{
-				flagz[nom][index] = -1;
-			}
+		for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++){
+			int index = v_it -> idx();
 			traindata.push_back(std::pair<int, int>(nom, index));
 		}
-		// treat -2 and -1 as the same class, collect the mesh index and face index as traindata
 	}
+	
 	std::random_shuffle(traindata.begin(), traindata.end());
 	printf("Total face number: %d\n", traindata.size());
 
@@ -289,7 +233,7 @@ int main(int argc, char* argv[])
 				int index = traindata[ttx].second;
 				int meshidx = traindata[ttx].first;
 
-				if (gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s[meshidx], ringlist[meshidx], filtered_normals[meshidx], halfedgesets[meshidx], noisy_normals[meshidx], face_centroid[meshidx], flagz[meshidx]) == -4)
+				if (gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
 					continue;
 				else
 					k1++;
