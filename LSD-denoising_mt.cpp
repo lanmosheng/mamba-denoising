@@ -283,7 +283,7 @@ int main(int argc, char* argv[])
 
 	gsupmat();
 
-	//read ground truth meshes 
+	//read noisy meshes 
 	printf("read mesh\n");
 	noisemesh.clean();
 	outputcache = new float[filesize * lsdsize*lsdsize * 3];
