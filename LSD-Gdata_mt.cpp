@@ -82,30 +82,7 @@ int preprocessing(
     std::vector<std::pair<int, int>>& traindata,
     int nom)
 {
-	// ringlist_list[nom].resize(meshlist[nom].n_faces());
-	// noisy_normals_list[nom].resize(meshlist[nom].n_faces());
-	// face_centroid_list[nom].resize(meshlist[nom].n_faces());
-	// filtered_normals_list[nom].resize(meshlist[nom].n_faces());
-	// halfedgeset_list[nom].resize(noisemeshlist[nom].n_halfedges());
-	// for (TriMesh::HalfedgeIter it = noisemeshlist[nom].halfedges_begin(); it != noisemeshlist[nom].halfedges_end(); it++)
-	// {
-	// 	halfedgeset_list[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
-	// 	halfedgeset_list[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
-	// }
-
-	// makeRing(meshlist[nom], ringlist_list[nom], 3);
-	// getFaceNormal(meshlist[nom], filtered_normals_list[nom]);
-	// getFaceNormal(noisemeshlist[nom], noisy_normals_list[nom]);
-	// getFaceCentroid(noisemeshlist[nom], face_centroid_list[nom]);
-	// sigma_s_list[nom] = getSigmaS(2, face_centroid_list[nom], noisemeshlist[nom]) / 8;
-	// markBoundaryFaces(meshlist[nom], flagz_list[nom]);
 	
-	// //obtain d_a/p_s
-	// for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++){
-	// 	int index = v_it -> idx();
-	// 	traindata.push_back(std::pair<int, int>(nom, index));
-	// }
-
 	ringlist.resize(mesh.n_faces());
     noisy_normals.resize(mesh.n_faces());
     face_centroid.resize(mesh.n_faces());
@@ -193,11 +170,6 @@ int main(int argc, char* argv[])
 			printf("data error");
 			return 0;
 		}
-
-		// ringlist_list[nom].resize(meshlist[nom].n_faces());
-		// noisy_normals_list[nom].resize(meshlist[nom].n_faces());
-		// face_centroid_list[nom].resize(meshlist[nom].n_faces());
-		// filtered_normals_list[nom].resize(meshlist[nom].n_faces());
 	}
 	//read noisy meshes 
 	for (int nom = 0; nom < numberofmesh; nom++)
@@ -209,18 +181,29 @@ int main(int argc, char* argv[])
 			printf("data error");
 			return 0;
 		}
-		// halfedgeset_list[nom].resize(noisemeshlist[nom].n_halfedges());
-		// for (TriMesh::HalfedgeIter it = noisemeshlist[nom].halfedges_begin(); it != noisemeshlist[nom].halfedges_end(); it++)
-		// {
-		// 	halfedgeset_list[nom][(*it).idx()].v1 = noisemeshlist[nom].point(noisemeshlist[nom].from_vertex_handle(*it));
-		// 	halfedgeset_list[nom][(*it).idx()].v2 = noisemeshlist[nom].point(noisemeshlist[nom].to_vertex_handle(*it));
-		// }
 		if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
 		{
 			printf("data error");
 			return 0;
 		}
 	}
+
+	for (int nom = 0; nom < numberofmesh; nom++){
+		preprocessing(
+			meshlist[nom],
+			noisemeshlist[nom],
+			ringlist_list[nom],
+			noisy_normals_list[nom],
+			filtered_normals_list[nom],
+			face_centroid_list[nom],
+			halfedgeset_list[nom],
+			flagz_list[nom],
+			sigma_s_list[nom],
+			traindata,
+			nom
+		);
+	}
+
 	int px[5];  //parameters for gdata 
 	// 0,1,2: the index range of output files groups, range(10, 20, 2) = 10, 12, 14, 16, 18
 	// 3: the number of LSD in each group
@@ -249,22 +232,6 @@ int main(int argc, char* argv[])
 	memset(outputcache, 0, px[4] * lsdsize*lsdsize * 3 * sizeof(float));
 	memset(gtcache, 0, px[4] * 3*sizeof(float));
 	
-	
-	//Make ring, get ground truth normal, noisy normal, face centroid, sigma_s
-	for (int nom = 0; nom < numberofmesh; nom++)
-	{
-		// makeRing(meshlist[nom], ringlist_list[nom], 3);
-		// getFaceNormal(meshlist[nom], filtered_normals_list[nom]);
-		// getFaceNormal(noisemeshlist[nom], noisy_normals_list[nom]);
-		// getFaceCentroid(noisemeshlist[nom], face_centroid_list[nom]);
-		// sigma_s_list[nom] = getSigmaS(2, face_centroid_list[nom], noisemeshlist[nom]) / 8;
-		// markBoundaryFaces(meshlist[nom], flagz_list[nom]);
-		// //obtain d_a/p_s
-		// for (TriMesh::FaceIter v_it = meshlist[nom].faces_begin(); v_it != meshlist[nom].faces_end(); v_it++){
-		// 	int index = v_it -> idx();
-		// 	traindata.push_back(std::pair<int, int>(nom, index));
-		// }
-	}
 	
 	std::random_shuffle(traindata.begin(), traindata.end());
 	printf("Total face number: %d\n", traindata.size());

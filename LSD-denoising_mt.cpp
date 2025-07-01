@@ -278,6 +278,7 @@ int main(int argc, char* argv[])
 			memset(outputcache, 0, filesize * lsdsize*lsdsize * 3 * sizeof(float));
 			for (int k1 = 0; k1 < thread_number; k1++)
 				thread_p[k1].clear();
+			
 			//write the LSD of all the faces to files
 			int n_faces = noisemesh.n_faces();
 			std::vector<int> sorted_face_order = globalSampling(noisemesh, flagz, n_faces);
