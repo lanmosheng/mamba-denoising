@@ -101,9 +101,9 @@ int preprocessing(
     sigma_s = getSigmaS(2, face_centroid, noisemesh) / 8;
     markBoundaryFaces(mesh, flagz);
 
-    for (TriMesh::FaceIter v_it = mesh.faces_begin(); v_it != mesh.faces_end(); ++v_it) {
-        int index = v_it->idx();
-        traindata.push_back(std::pair<int, int>(nom, index));
+	std::vector<int> sorted_face_order = globalSampling(mesh, flagz, mesh.n_faces());
+    for (int idx : sorted_face_order){
+        traindata.push_back(std::pair<int, int>(nom, idx));
     }
 
 	return 0;
