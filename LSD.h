@@ -66,7 +66,7 @@ struct SampleDirection{
 	int r2;
 };
 
-extern std::vector<SampleDirection> gloabl_sample;
+extern std::vector<SampleDirection> local_sample;
 
 
 
