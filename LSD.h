@@ -59,14 +59,14 @@ struct line
 
 
 struct SampleDirection{
-	float x,
-	float y,
-	float theta,
-	int radius,
-	int r2
+	double x;
+	double y;
+	double theta;
+	int radius;
+	int r2;
 };
 
-extern vector<SampleDirection> gloabl_sample;
+extern std::vector<SampleDirection> gloabl_sample;
 
 
 
@@ -108,4 +108,4 @@ std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, co
 
 void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz);
 
-void generateLocalSamplingOrder(vector <SampleDirection>& gloabl_sample);
+void generateLocalSamplingOrder(std::vector <SampleDirection>& gloabl_sample);

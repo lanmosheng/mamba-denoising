@@ -480,7 +480,7 @@ void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz) {
 }
 
 
-void generateLocalSamplingOrder(vector <SampleDirection>& gloabl_sample){
+void generateLocalSamplingOrder(std::vector <SampleDirection>& gloabl_sample){
 	gloabl_sample.clear();
 	gloabl_sample.push_back({0,0,0,0,0});
 	for(int i = 1; i <= lsd_r_size; i++){

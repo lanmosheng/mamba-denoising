@@ -1,7 +1,7 @@
 #include"LSD.h"
 
 int supmat[lsdsize][lsdsize][3];
-vector<SampleDirection> gloabl_sample;
+std::vector<SampleDirection> gloabl_sample;
 std::thread td[thread_number];
 float *outputcache;
 
