@@ -478,3 +478,19 @@ void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz) {
 		}
 	}
 }
+
+
+void generateLocalSamplingOrder(vector <SampleDirection>& gloabl_sample){
+	gloabl_sample.clear();
+	gloabl_sample.push_back({0,0,0,0,0});
+	for(int i = 1; i <= lsd_r_size; i++){
+		int r = i;
+		int r2 = r * r;
+		for(int j = 0; j < lsd_t_size; j++){
+			float theta = (2.0 * M_PI * j) / lsd_t_size;
+			float x = sin(theta); 
+			float y = cos(theta);
+			gloabl_sample.push_back({x,y,theta,r,r2});
+		}
+	}
+}

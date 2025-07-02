@@ -15,6 +15,8 @@ const int thread_number = 8;
 extern std::thread td[thread_number];
 const int mt_flag = 1;  
 const int lsdsize = 80;
+const int lsd_r_size = 80;
+const int lsd_t_size = 80;
 extern float *outputcache;
 extern int supmat[lsdsize][lsdsize][3];
 
@@ -56,6 +58,19 @@ struct line
 };
 
 
+struct SampleDirection{
+	float x,
+	float y,
+	float theta,
+	int radius,
+	int r2
+};
+
+extern vector<SampleDirection> gloabl_sample;
+
+
+
+
 void getFaceNormal(TriMesh& mesh, std::vector<TriMesh::Normal>& normals);
 
 void getFaceCentroid(TriMesh& mesh, std::vector<TriMesh::Point>& centroid);
@@ -92,3 +107,5 @@ int samplingNormal(
 std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, const int n_faces);
 
 void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz);
+
+void generateLocalSamplingOrder(vector <SampleDirection>& gloabl_sample);
