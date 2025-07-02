@@ -131,8 +131,14 @@ int goutputfile(int nface, int ncase)
 	fprintf(namelist, "%d\n", nfile);
 	for (int i = 0; i < nfile; i++)
 	{
-		std::string  temps = std::to_string(i) + ".bin";
+		std::string dir = "./data/";
+		std::string  temps = dir + std::to_string(i) + ".bin";
 		filepo[i] = fopen(temps.c_str(), "wb");
+		if(filepo[i] == nullptr){
+			printf("Error opening file: %s\n", temps.c_str());
+			fclose(namelist);
+			return -1;
+		}
 		fprintf(namelist, "%s\n", temps.c_str());
 	}
 	fclose(namelist);
