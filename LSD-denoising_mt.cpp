@@ -104,9 +104,11 @@ int preprocessing()
 	noisy_normals.resize(noisemesh.n_faces());
 	face_centroid.resize(noisemesh.n_faces());
 	filtered_normals.resize(noisemesh.n_faces());
+	halfedgeset.resize(noisemesh.n_halfedges());
+
 	errorflag.resize(noisemesh.n_faces());
 	msave.resize(noisemesh.n_faces());
-	halfedgeset.resize(noisemesh.n_halfedges());
+	
 	for (TriMesh::HalfedgeIter it = noisemesh.halfedges_begin(); it != noisemesh.halfedges_end(); it++)
 	{
 		halfedgeset[(*it).idx()].v1 = noisemesh.point(noisemesh.from_vertex_handle(*it));
@@ -116,8 +118,8 @@ int preprocessing()
 	getFaceNormal(noisemesh, noisy_normals);
 	getFaceCentroid(noisemesh, face_centroid);
 	sigma_s = getSigmaS(2, face_centroid, noisemesh) / 8;
-	
 	markBoundaryFaces(noisemesh, flagz);
+	
 
 	return 0;
 }
