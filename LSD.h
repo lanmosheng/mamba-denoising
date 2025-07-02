@@ -108,4 +108,4 @@ std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, co
 
 void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz);
 
-void generateLocalSamplingOrder(std::vector <SampleDirection>& gloabl_sample);
+void generateLocalSamplingOrder(std::vector <SampleDirection>& local_sample);

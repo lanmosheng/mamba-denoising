@@ -213,173 +213,176 @@ int samplingNormal(
     int lsdsize,
     float* outputmat)
 {
-	for (int i = 0; i < lsdsize; i++)
-	{
-		for (int j = 0; j < lsdsize; j++)
-		{
+	// for (int i = 0; i < lsdsize; i++)
+	// {
+	// 	for (int j = 0; j < lsdsize; j++)
+	// 	{
 
-			double glength = sigma_s * sqrt(supmat[i][j][2]); //total length of geodesics
-			double clength = 0; // current length of geodesics
-			int centreface = index;
+	// 		double glength = sigma_s * sqrt(supmat[i][j][2]); //total length of geodesics
+	// 		double clength = 0; // current length of geodesics
+	// 		int centreface = index;
 
-			TriMesh::Point nowpoint = face_centroid[index];
-			TriMesh::Normal nownormal = startnormal;//direction of geodesics
+	// 		TriMesh::Point nowpoint = face_centroid[index];
+	// 		TriMesh::Normal nownormal = startnormal;//direction of geodesics
 
-			//compute the direction of geodesics
-			if (supmat[i][j][0] == 0)
-			{
-				if (supmat[i][j][1] > 0)
-				{
-					Eigen::AngleAxisd rotation_vector(0, Eigen::Vector3d(noisy_normals[index].data()[0],
-						noisy_normals[index].data()[1],
-						noisy_normals[index].data()[2]));
+	// 		//compute the direction of geodesics
+	// 		if (supmat[i][j][0] == 0)
+	// 		{
+	// 			if (supmat[i][j][1] > 0)
+	// 			{
+	// 				Eigen::AngleAxisd rotation_vector(0, Eigen::Vector3d(noisy_normals[index].data()[0],
+	// 					noisy_normals[index].data()[1],
+	// 					noisy_normals[index].data()[2]));
 
-					Eigen::Vector3d temp3(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
-					temp3 = rotation_vector.matrix() * temp3;
-					nownormal.data()[0] = temp3[0];
-					nownormal.data()[1] = temp3[1];
-					nownormal.data()[2] = temp3[2];
-				}
-				else
-				{
-					Eigen::AngleAxisd rotation_vector(M_PI, Eigen::Vector3d(noisy_normals[index].data()[0],
-						noisy_normals[index].data()[1],
-						noisy_normals[index].data()[2]));
+	// 				Eigen::Vector3d temp3(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
+	// 				temp3 = rotation_vector.matrix() * temp3;
+	// 				nownormal.data()[0] = temp3[0];
+	// 				nownormal.data()[1] = temp3[1];
+	// 				nownormal.data()[2] = temp3[2];
+	// 			}
+	// 			else
+	// 			{
+	// 				Eigen::AngleAxisd rotation_vector(M_PI, Eigen::Vector3d(noisy_normals[index].data()[0],
+	// 					noisy_normals[index].data()[1],
+	// 					noisy_normals[index].data()[2]));
 
-					Eigen::Vector3d temp3(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
-					temp3 = rotation_vector.matrix() * temp3;
-					nownormal.data()[0] = temp3[0];
-					nownormal.data()[1] = temp3[1];
-					nownormal.data()[2] = temp3[2];
-				}
+	// 				Eigen::Vector3d temp3(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
+	// 				temp3 = rotation_vector.matrix() * temp3;
+	// 				nownormal.data()[0] = temp3[0];
+	// 				nownormal.data()[1] = temp3[1];
+	// 				nownormal.data()[2] = temp3[2];
+	// 			}
 
-			}
-			else
-			{
-				Eigen::AngleAxisd rotation_vector(atan2(supmat[i][j][0], supmat[i][j][1]), Eigen::Vector3d(noisy_normals[index].data()[0],
-					noisy_normals[index].data()[1],
-					noisy_normals[index].data()[2]));
-				Eigen::Vector3d temp3(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
-				temp3 = rotation_vector.matrix() * temp3;
-				nownormal.data()[0] = temp3[0];
-				nownormal.data()[1] = temp3[1];
-				nownormal.data()[2] = temp3[2];
-			}
-			nownormal.normalize();
+	// 		}
+	// 		else
+	// 		{
+	// 			Eigen::AngleAxisd rotation_vector(atan2(supmat[i][j][0], supmat[i][j][1]), Eigen::Vector3d(noisy_normals[index].data()[0],
+	// 				noisy_normals[index].data()[1],
+	// 				noisy_normals[index].data()[2]));
+	// 			Eigen::Vector3d temp3(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
+	// 			temp3 = rotation_vector.matrix() * temp3;
+	// 			nownormal.data()[0] = temp3[0];
+	// 			nownormal.data()[1] = temp3[1];
+	// 			nownormal.data()[2] = temp3[2];
+	// 		}
+	// 		nownormal.normalize();
 
-			//generate the normal of sampling points
-			int halfedgenum = -1;
-			int endflag = 0;
-			OpenMesh::FaceHandle nowface(index);
+	// 		//generate the normal of sampling points
+	// 		int halfedgenum = -1;
+	// 		int endflag = 0;
+	// 		OpenMesh::FaceHandle nowface(index);
 
-			if (supmat[i][j][0] == 0 && supmat[i][j][1] == 0)
-			{
+	// 		if (supmat[i][j][0] == 0 && supmat[i][j][1] == 0)
+	// 		{
 
-				Eigen::Vector3d temp5(noisy_normals[nowface.idx()].data()[0], noisy_normals[nowface.idx()].data()[1],
-					noisy_normals[nowface.idx()].data()[2]);
-				temp5 = d2 * temp5;
-				outputmat[i * lsdsize*3 + j * 3] = (float)temp5[0];
-				outputmat[i * lsdsize*3 + j * 3+ 1] = (float)temp5[1];
-				outputmat[i * lsdsize*3 + j * 3+ 2] = (float)temp5[2];
-			}
-			else
-			{
-				std::unordered_set<int> visitedface;
+	// 			Eigen::Vector3d temp5(noisy_normals[nowface.idx()].data()[0], noisy_normals[nowface.idx()].data()[1],
+	// 				noisy_normals[nowface.idx()].data()[2]);
+	// 			temp5 = d2 * temp5;
+	// 			outputmat[i * lsdsize*3 + j * 3] = (float)temp5[0];
+	// 			outputmat[i * lsdsize*3 + j * 3+ 1] = (float)temp5[1];
+	// 			outputmat[i * lsdsize*3 + j * 3+ 2] = (float)temp5[2];
+	// 		}
+	// 		else
+	// 		{
+	// 			std::unordered_set<int> visitedface;
 
-				while (endflag == 0)
-				{
-					visitedface.insert(nowface.idx());
-					int edgecount = 0;
-					int goflag = 0;
-					//find the edge that intersects the geodesic
-					for (TriMesh::FaceHalfedgeIter it = mesh.fh_begin(nowface); it != mesh.fh_end(nowface); it++)
-					{
-						TriMesh::Point nextpoint, temppoint;
-						int nowhalfedge = (*it).idx();
-
-
-						if (nowhalfedge != halfedgenum)
-						{
-							edgecount++;
-							auto temppoint = nowpoint + nownormal * sigma_s * 100;
-
-							if (CalculateLineLineIntersection(halfedgeset[nowhalfedge].v1,
-								halfedgeset[nowhalfedge].v2, nowpoint, temppoint, nextpoint, nownormal) == true)
-							{
-
-								//found the intersection
-								goflag = 1;
-								clength += (nextpoint - nowpoint).length();
-
-								// if the current length of geodesics is longer than the total length
-								// the sampling point is located at this face
-								// save the face normal to outputmat
-								if (clength >= glength)
-								{
-									Eigen::Vector3d temp5(noisy_normals[nowface.idx()].data()[0], noisy_normals[nowface.idx()].data()[1],
-										noisy_normals[nowface.idx()].data()[2]);
-									temp5 = d2 * temp5;
-									temp5.normalize();
-									outputmat[i * lsdsize*3 + j * 3] = (float)temp5[0];
-									outputmat[i * lsdsize * 3 + j * 3 + 1] = (float)temp5[1];
-									outputmat[i * lsdsize * 3 + j * 3 + 2] = (float)temp5[2];
+	// 			while (endflag == 0)
+	// 			{
+	// 				visitedface.insert(nowface.idx());
+	// 				int edgecount = 0;
+	// 				int goflag = 0;
+	// 				//find the edge that intersects the geodesic
+	// 				for (TriMesh::FaceHalfedgeIter it = mesh.fh_begin(nowface); it != mesh.fh_end(nowface); it++)
+	// 				{
+	// 					TriMesh::Point nextpoint, temppoint;
+	// 					int nowhalfedge = (*it).idx();
 
 
-									endflag = -1;
-									break;
+	// 					if (nowhalfedge != halfedgenum)
+	// 					{
+	// 						edgecount++;
+	// 						auto temppoint = nowpoint + nownormal * sigma_s * 100;
 
-								}
+	// 						if (CalculateLineLineIntersection(halfedgeset[nowhalfedge].v1,
+	// 							halfedgeset[nowhalfedge].v2, nowpoint, temppoint, nextpoint, nownormal) == true)
+	// 						{
 
-								//otherwise the geodesics should be extended to next face
+	// 							//found the intersection
+	// 							goflag = 1;
+	// 							clength += (nextpoint - nowpoint).length();
 
-								nowpoint = nextpoint;
+	// 							// if the current length of geodesics is longer than the total length
+	// 							// the sampling point is located at this face
+	// 							// save the face normal to outputmat
+	// 							if (clength >= glength)
+	// 							{
+	// 								Eigen::Vector3d temp5(noisy_normals[nowface.idx()].data()[0], noisy_normals[nowface.idx()].data()[1],
+	// 									noisy_normals[nowface.idx()].data()[2]);
+	// 								temp5 = d2 * temp5;
+	// 								temp5.normalize();
+	// 								outputmat[i * lsdsize*3 + j * 3] = (float)temp5[0];
+	// 								outputmat[i * lsdsize * 3 + j * 3 + 1] = (float)temp5[1];
+	// 								outputmat[i * lsdsize * 3 + j * 3 + 2] = (float)temp5[2];
 
-								halfedgenum = mesh.opposite_halfedge_handle(*it).idx();
-								OpenMesh::FaceHandle nextface = mesh.face_handle(mesh.opposite_halfedge_handle(*it));
 
-								if (nextface.idx() == -1)  //reach the boundray, stop 
-								{
-									endflag = -2;
-									break;
-								}
-								if (visitedface.find(nextface.idx()) != visitedface.end()) // reach a visited face, stop
-								{
-									endflag = -3;
-									break;
-								}
-								// rotate the geodesics to next face
-								Eigen::Matrix3d d(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(noisy_normals[nowface.idx()].data()[0],
-									noisy_normals[nowface.idx()].data()[1],
-									noisy_normals[nowface.idx()].data()[2]), Eigen::Vector3d(noisy_normals[nextface.idx()].data()[0],
-									noisy_normals[nextface.idx()].data()[1],
-									noisy_normals[nextface.idx()].data()[2])));
+	// 								endflag = -1;
+	// 								break;
 
-								Eigen::Vector3d temp2(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
-								temp2 = d * temp2;
-								nownormal.data()[0] = temp2[0];
-								nownormal.data()[1] = temp2[1];
-								nownormal.data()[2] = temp2[2];
-								nownormal.normalize();
+	// 							}
 
-								nowface = nextface;
-								break;
-							}
+	// 							//otherwise the geodesics should be extended to next face
 
-						}
+	// 							nowpoint = nextpoint;
 
-						// can not find the edge, error
-						if ((edgecount == 2 && goflag == 0 && halfedgenum != -1) || (edgecount == 3 && goflag == 0 && halfedgenum == -1))
-						{
-							endflag = -4;
-							printf("error: %d %d %d|", index, i, j);
-							return endflag;
-						}
-					}
+	// 							halfedgenum = mesh.opposite_halfedge_handle(*it).idx();
+	// 							OpenMesh::FaceHandle nextface = mesh.face_handle(mesh.opposite_halfedge_handle(*it));
 
-				}
-			}
+	// 							if (nextface.idx() == -1)  //reach the boundray, stop 
+	// 							{
+	// 								endflag = -2;
+	// 								break;
+	// 							}
+	// 							if (visitedface.find(nextface.idx()) != visitedface.end()) // reach a visited face, stop
+	// 							{
+	// 								endflag = -3;
+	// 								break;
+	// 							}
+	// 							// rotate the geodesics to next face
+	// 							Eigen::Matrix3d d(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(noisy_normals[nowface.idx()].data()[0],
+	// 								noisy_normals[nowface.idx()].data()[1],
+	// 								noisy_normals[nowface.idx()].data()[2]), Eigen::Vector3d(noisy_normals[nextface.idx()].data()[0],
+	// 								noisy_normals[nextface.idx()].data()[1],
+	// 								noisy_normals[nextface.idx()].data()[2])));
 
-		}
+	// 							Eigen::Vector3d temp2(nownormal.data()[0], nownormal.data()[1], nownormal.data()[2]);
+	// 							temp2 = d * temp2;
+	// 							nownormal.data()[0] = temp2[0];
+	// 							nownormal.data()[1] = temp2[1];
+	// 							nownormal.data()[2] = temp2[2];
+	// 							nownormal.normalize();
+
+	// 							nowface = nextface;
+	// 							break;
+	// 						}
+
+	// 					}
+
+	// 					// can not find the edge, error
+	// 					if ((edgecount == 2 && goflag == 0 && halfedgenum != -1) || (edgecount == 3 && goflag == 0 && halfedgenum == -1))
+	// 					{
+	// 						endflag = -4;
+	// 						printf("error: %d %d %d|", index, i, j);
+	// 						return endflag;
+	// 					}
+	// 				}
+
+	// 			}
+	// 		}
+
+	// 	}
+	// }
+	for (int i = 0; i < lsd_r_size * lsd_t_size + 1; i++){
+
 	}
 }
 
@@ -480,9 +483,9 @@ void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz) {
 }
 
 
-void generateLocalSamplingOrder(std::vector <SampleDirection>& gloabl_sample){
-	gloabl_sample.clear();
-	gloabl_sample.push_back({0,0,0,0,0});
+void generateLocalSamplingOrder(std::vector <SampleDirection>& local_sample){
+	local_sample.clear();
+	local_sample.push_back({0,0,0,0,0});
 	for(int i = 1; i <= lsd_r_size; i++){
 		int r = i;
 		int r2 = r * r;
@@ -490,7 +493,7 @@ void generateLocalSamplingOrder(std::vector <SampleDirection>& gloabl_sample){
 			float theta = (2.0 * M_PI * j) / lsd_t_size;
 			float x = sin(theta); 
 			float y = cos(theta);
-			gloabl_sample.push_back({x,y,theta,r,r2});
+			local_sample.push_back({x,y,theta,r,r2});
 		}
 	}
 }
