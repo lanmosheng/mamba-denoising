@@ -215,6 +215,7 @@ int samplingNormal(
 {
 	
 	for (int i = 0; i < lsd_r_size * lsd_t_size + 1; i++){
+		//init
 		auto &s = local_sample[i];
 		double glength = sigma_s * 1.0 * s.radius;
 		double clength = 0;
@@ -230,10 +231,12 @@ int samplingNormal(
 				noisy_normals[index][2]
 			)
 		);
+
 		Eigen::Vector3d temp3(nownormal[0],nownormal[1],nownormal[2]);
 		temp3 = rotation_vector * temp3;
 		nownormal = TriMesh::Normal(temp3[0],temp3[1],temp3[2]);
 		nownormal.normalize();
+		
 		if(i == 0){
 			Eigen::Vector3d temp5(
 				noisy_normals[centreface][0],
@@ -256,7 +259,7 @@ int samplingNormal(
 			int goflag = 0;
 			for(auto it = mesh.fh_begin(nowface); it != mesh.fh_end(nowface); it++){
 				int nowhalfedge = it->idx();
-				if(nowhalfedge == halfedgenum) continue;
+				if(nowhalfedge == halfedgenum) continue; //防止跳回来
 
 				edgecount++;
 				auto temppoint = nowpoint + nownormal * sigma_s * 100;
