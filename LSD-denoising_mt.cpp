@@ -1,6 +1,5 @@
 #include"LSD.h"
 
-int supmat[lsdsize][lsdsize][3];
 std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
 float *outputcache;
@@ -36,7 +35,7 @@ std::vector<Eigen::Matrix3d> msave;
 std::vector<int> errorflag;
 std::vector<FILE*> filepo;
 
-int gLSD(int index, float outputmat[lsdsize*lsdsize * 3])
+int gLSD(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3])
 {
 
 	// //obtain n*
@@ -58,7 +57,7 @@ int gLSD(int index, float outputmat[lsdsize*lsdsize * 3])
 
 	//generate LSD
 
-	int err = samplingNormal(noisemesh, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, lsdsize, outputmat);
+	int err = samplingNormal(noisemesh, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat);
 	return err;
 }
 void updateVertexPosition(TriMesh &mesh, std::vector<TriMesh::Normal> &filtered_normals, int iteration_number, bool fixed_boundary)
@@ -194,7 +193,7 @@ void threadprocess(int p)
 		int index = thread_p[p][i].index;
 		int count = thread_p[p][i].count;
 
-		if (gLSD(index, outputcache + count*lsdsize*lsdsize * 3) == -4)
+		if (gLSD(index, outputcache + count* sampling_size * 3) == -4)
 			errorflag[index] = 1;
 		else
 			errorflag[index] = 0;
@@ -239,12 +238,12 @@ int main(int argc, char* argv[])
 
 	fscanf(profile, "%d", &numberofmesh);
 
-	gsupmat();
+	generateLocalSamplingOrder(local_sample);
 
 	//read noisy meshes 
 	printf("read mesh\n");
 	noisemesh.clean();
-	outputcache = new float[filesize * lsdsize*lsdsize * 3];
+	outputcache = new float[filesize * sampling_size * 3];
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
 
@@ -276,7 +275,7 @@ int main(int argc, char* argv[])
 			int count = 0;
 			int fcount = 0;
 
-			memset(outputcache, 0, filesize * lsdsize*lsdsize * 3 * sizeof(float));
+			memset(outputcache, 0, filesize * sampling_size * 3 * sizeof(float));
 			for (int k1 = 0; k1 < thread_number; k1++)
 				thread_p[k1].clear();
 			
@@ -296,11 +295,11 @@ int main(int argc, char* argv[])
 					for(int k2 = 0; k2 < thread_number; k2++){
 						td[k2].join();
 					}
-					fwrite(outputcache, sizeof(float), count * lsdsize * lsdsize * 3, filepo[fcount]);
+					fwrite(outputcache, sizeof(float), count * sampling_size * 3, filepo[fcount]);
 
 					count = 0;
 					fcount++;
-					memset(outputcache, 0, filesize * lsdsize * lsdsize * 3 * sizeof(float));
+					memset(outputcache, 0, filesize * sampling_size * 3 * sizeof(float));
 					for (int k1 = 0; k1 < thread_number; k1++)
 						thread_p[k1].clear();
 				}

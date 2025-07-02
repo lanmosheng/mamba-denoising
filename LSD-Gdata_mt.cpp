@@ -1,6 +1,5 @@
 #include"LSD.h"
 
-int supmat[lsdsize][lsdsize][3];
 std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
 float *outputcache;
@@ -37,7 +36,7 @@ std::vector<std::vector<TriMesh::Point>> face_centroid_list;
 std::vector<std::vector<TriMesh::Normal>> filtered_normals_list;
 std::vector<std::vector<int>> flagz_list;
 
-int gLSD(int index, TriMesh &mesh2, float outputmat[lsdsize*lsdsize*3], float groundtruth[3],
+int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size*3], float groundtruth[3],
 	double sigma_s,
 	std::vector<ring> &ringlist,
 	std::vector<TriMesh::Normal> &filtered_normals,
@@ -66,7 +65,7 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[lsdsize*lsdsize*3], float gr
 	groundtruth[2] = (float)gtnormal[2];
 
 	//generate LSD
-	int err = samplingNormal(mesh2, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, lsdsize, outputmat);
+	int err = samplingNormal(mesh2, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat);
 	return err;
 }
 
@@ -118,7 +117,7 @@ void threadprocess(int p)
 		int meshidx = thread_p[p][i].meshindex;
 		int count = thread_p[p][i].count;
 
-		gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]);
+		gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]);
 
 	}
 
@@ -228,16 +227,16 @@ int main(int argc, char* argv[])
 	}
 	printf("Output case number: %d\n", totalcase);
 
-	outputcache = new float[px[4] * lsdsize*lsdsize * 3];
+	outputcache = new float[px[4] * sampling_size * 3];
 	gtcache = new float[px[4] * 3];
-	memset(outputcache, 0, px[4] * lsdsize*lsdsize * 3 * sizeof(float));
+	memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
 	memset(gtcache, 0, px[4] * 3*sizeof(float));
 	
 	
 	std::random_shuffle(traindata.begin(), traindata.end());
 	printf("Total face number: %d\n", traindata.size());
 
-	gsupmat();
+	generateLocalSamplingOrder(local_sample);
 
 
 	int ttx = -1;
@@ -266,7 +265,7 @@ int main(int argc, char* argv[])
 				int index = traindata[ttx].second;
 				int meshidx = traindata[ttx].first;
 
-				if (gLSD(index, noisemeshlist[meshidx], outputcache + count*lsdsize*lsdsize * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
+				if (gLSD(index, noisemeshlist[meshidx], outputcache + count* sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
 					continue;
 				else
 					k1++;
@@ -282,14 +281,14 @@ int main(int argc, char* argv[])
 					FILE* outfile1 = fopen(outputname, "wb");
 					FILE* outfile2 = fopen(outputflagname, "wb");
 
-					fwrite(outputcache, sizeof(float), px[4] * lsdsize*lsdsize * 3, outfile1);
+					fwrite(outputcache, sizeof(float), px[4] * sampling_size * 3, outfile1);
 					fwrite(gtcache, sizeof(float), px[4] * 3, outfile2);
 					fclose(outfile1);
 					fclose(outfile2);
 					count = 0;
 					fcount++;
 
-					memset(outputcache, 0, px[4] * lsdsize*lsdsize * 3 * sizeof(float));
+					memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
 					memset(gtcache, 0, px[4] * 3 * sizeof(float));
 
 				}
@@ -326,14 +325,14 @@ int main(int argc, char* argv[])
 					FILE* outfile1 = fopen(outputname, "wb");
 					FILE* outfile2 = fopen(outputflagname, "wb");
 
-					fwrite(outputcache, sizeof(float), px[4] * lsdsize*lsdsize * 3, outfile1);
+					fwrite(outputcache, sizeof(float), px[4] * sampling_size * 3, outfile1);
 					fwrite(gtcache, sizeof(float), px[4] * 3, outfile2);
 					fclose(outfile1);
 					fclose(outfile2);
 					count = 0;
 					fcount++;
 
-					memset(outputcache, 0, px[4] * lsdsize*lsdsize * 3 * sizeof(float));
+					memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
 					memset(gtcache, 0, px[4] * 3 * sizeof(float));
 					for (int k1 = 0; k1 < thread_number; k1++)
 						thread_p[k1].clear();

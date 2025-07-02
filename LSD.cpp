@@ -146,21 +146,21 @@ bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& 
 		return false;
 }
 
-void gsupmat()
-{
-	memset(supmat, 0, sizeof(supmat));
-	//generate i, j and i^2+j^2 
-	for (int i = 0; i < lsdsize; i++)
-		for (int j = 0; j < lsdsize; j++)
-		{
-			int zi = i - lsdsize / 2;
-			int zj = j - lsdsize / 2;
-			supmat[i][j][2] = zi * zi + zj * zj;
-			supmat[i][j][0] = zi;
-			supmat[i][j][1] = zj;
-		}
-	return;
-}
+// void gsupmat()
+// {
+// 	memset(supmat, 0, sizeof(supmat));
+// 	//generate i, j and i^2+j^2 
+// 	for (int i = 0; i < lsdsize; i++)
+// 		for (int j = 0; j < lsdsize; j++)
+// 		{
+// 			int zi = i - lsdsize / 2;
+// 			int zj = j - lsdsize / 2;
+// 			supmat[i][j][2] = zi * zi + zj * zj;
+// 			supmat[i][j][0] = zi;
+// 			supmat[i][j][1] = zj;
+// 		}
+// 	return;
+// }
 
 
 TriMesh::Normal getAveNormal(
@@ -210,11 +210,10 @@ int samplingNormal(
     const std::vector<TriMesh::Normal>& noisy_normals,
     std::vector<line>& halfedgeset,
     double sigma_s,
-    int lsdsize,
     float* outputmat)
 {
 	
-	for (int i = 0; i < lsd_r_size * lsd_t_size + 1; i++){
+	for (int i = 0; i < local_sample.size(); i++){
 		//init
 		auto &s = local_sample[i];
 		double glength = sigma_s * 1.0 * s.radius;

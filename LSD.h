@@ -14,11 +14,12 @@
 const int thread_number = 8;
 extern std::thread td[thread_number];
 const int mt_flag = 1;  
-const int lsdsize = 80;
+// const int lsdsize = 80;
 const int lsd_r_size = 80;
 const int lsd_t_size = 80;
+const int sampling_size = lsd_r_size * lsd_t_size + 1;
 extern float *outputcache;
-extern int supmat[lsdsize][lsdsize][3];
+// extern int supmat[lsdsize][lsdsize][3];
 
 enum FaceNeighborType { kVertexBased, kEdgeBased, kRadiusBased };
 enum DenoiseType { kLocal, kGlobal };
@@ -101,7 +102,6 @@ int samplingNormal(
     const std::vector<TriMesh::Normal>& noisy_normals,
     std::vector<line>& halfedgeset,
     double sigma_s,
-    int lsdsize,
     float* outputmat);
 
 std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, const int n_faces);
