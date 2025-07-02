@@ -20,7 +20,7 @@ LSD-Gdata_mt
 *.txt
 
 run_test.sh
-
+test_sampling
 
 !model/.gitkeep
 !stest/.gitkeep
