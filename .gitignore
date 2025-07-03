@@ -13,6 +13,7 @@ virtualData
 *.h5
 *.pkl
 *.onnx
+*.ply
 
 **/__pycache__/
 *.py[cod]
