@@ -1,6 +1,5 @@
 #include"LSD.h"
 
-#include <GLFW/glfw3.h>
 
 std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
@@ -101,6 +100,7 @@ int samplingNormal_test(
     float* outputmat,
     std::vector<int> &ret)
 {
+    std::cout<<"Local Sample size:" << local_sample.size()<<std::endl;
 	
 	for (int i = 0; i < local_sample.size(); i++){
 		//init
@@ -208,6 +208,8 @@ int samplingNormal_test(
 			}
 		}
 	}
+	
+	return 0;
 }
 
 int gLSD_test(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3], std::vector<int> &ret)
@@ -219,7 +221,7 @@ int gLSD_test(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3], std
 	//obtain polar axis
 	TriMesh::Normal startnormal = getPolarAxis(noisymesh, index, face_centroid);
 
-	//obtain rotation matrix and inverse rotation matrix             
+	// //obtain rotation matrix and inverse rotation matrix             
 	Eigen::Matrix3d d2(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(a1.data()[0],
 		a1.data()[1],
 		a1.data()[2]), Eigen::Vector3d(1, 0, 0)));
@@ -231,29 +233,36 @@ int gLSD_test(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3], std
 	//generate LSD
 
 	int err = samplingNormal_test(noisymesh, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat, ret);
+	//return err;
 	return err;
 }
 
 int main(){
-    outputcache = new float[filesize * sampling_size * 3];
+    outputcache = new float[sampling_size * 3];
     readmesh(noisymesh, noisymesh_path);
     // readmesh(mesh, mesh_path);
- 
+    
     preprocessing(noisymesh);
-
+    
     int n_faces = noisymesh.n_faces();
     std::vector<int> traindata = globalSampling(noisymesh, flagz, n_faces);
     
     std::string filen = "sample";
     // for(int i=10;i<=100;i+=10){
-    //     saveSelectedFacesToPLY(noisymesh, traindata, filen, i);
-    //     filen = "sample";
-    // }
-
-
+        //     saveSelectedFacesToPLY(noisymesh, traindata, filen, i);
+        //     filen = "sample";
+        // }
+        
+        
+    std::cout<<traindata.size()<<std::endl;
     std::vector<int> localSampleResult;
-    gLSD_test(traindata[0], outputcache, localSampleResult);
+    std::cout<< localSampleResult.size() << std::endl;
+    generateLocalSamplingOrder(local_sample);
+	gLSD_test(traindata[0], outputcache, localSampleResult);
     std::string ss="samplingLocal";
-    // saveSelectedFacesToPLY(noisymesh, localSampleResult, ss, 100);
+	for(int i=10;i<=100;i+=10){
+		saveSelectedFacesToPLY(noisymesh, localSampleResult, ss, i);
+		ss = "samplingLocal";
+	}
     return 0;
 }
