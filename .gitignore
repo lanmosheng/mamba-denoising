@@ -4,6 +4,8 @@ stest/*
 strain/*
 thirdparty/*
 
+virtualData
+
 *.pt
 *.ckpt
 *.npy

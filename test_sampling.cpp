@@ -12,7 +12,7 @@ std::vector<TriMesh::Normal> filtered_normals;
 std::vector<int> flagz;
 std::vector<ring> ringlist;
 double sigma_s = 0;
-
+const std::string folder = "./virtualData/";
 
 int preprocessing(TriMesh& noisemesh)
 {
@@ -48,9 +48,9 @@ std::string mesh_path = "./strain/bumpy_sphere.obj";
 
 std::string num[10]={"10","20","30","40","50","60","70","80","90","100"};
 
-void saveSelectedFacesToPLY(TriMesh& mesh, const std::vector<int>& traindata, std::string& filename, int dv) {
+void saveSelectedFacesToPLY(TriMesh& mesh, const std::vector<int>& traindata, const std::string& filename, int dv) {
     TriMesh selectedMesh;
-    filename = filename + num[dv/10-1] + ".ply";
+    std::string savefile = filename + num[dv/10-1] + ".ply";
     // Add the vertices from the original mesh
     for (TriMesh::VertexIter v_it = mesh.vertices_begin(); v_it != mesh.vertices_end(); ++v_it) {
         selectedMesh.add_vertex(mesh.point(*v_it));
@@ -70,8 +70,8 @@ void saveSelectedFacesToPLY(TriMesh& mesh, const std::vector<int>& traindata, st
     }
 
     // Write the selected faces to a PLY file
-    if (OpenMesh::IO::write_mesh(selectedMesh, filename)) {
-        std::cout << "Selected faces saved to " << filename << std::endl;
+    if (OpenMesh::IO::write_mesh(selectedMesh, savefile)) {
+        std::cout << "Selected faces saved to " << savefile << std::endl;
     } else {
         std::cerr << "Error: Could not write mesh to PLY file " << filename << std::endl;
     }
@@ -247,11 +247,9 @@ int main(){
     int n_faces = noisymesh.n_faces();
     std::vector<int> traindata = globalSampling(noisymesh, flagz, n_faces);
     
-    std::string filen = "sample";
-    // for(int i=10;i<=100;i+=10){
-        //     saveSelectedFacesToPLY(noisymesh, traindata, filen, i);
-        //     filen = "sample";
-        // }
+    for(int i=10;i<=100;i+=10){
+            saveSelectedFacesToPLY(noisymesh, traindata, folder + "GlobalSampling", i);
+    }
         
         
     std::cout<<traindata.size()<<std::endl;
@@ -259,10 +257,8 @@ int main(){
     std::cout<< localSampleResult.size() << std::endl;
     generateLocalSamplingOrder(local_sample);
 	gLSD_test(traindata[0], outputcache, localSampleResult);
-    std::string ss="samplingLocal";
 	for(int i=10;i<=100;i+=10){
-		saveSelectedFacesToPLY(noisymesh, localSampleResult, ss, i);
-		ss = "samplingLocal";
+		saveSelectedFacesToPLY(noisymesh, localSampleResult, folder + "LocalSampling", i);
 	}
     return 0;
 }
