@@ -87,6 +87,153 @@ int readmesh(TriMesh& mesh, std::string mesh_path){
     std::cout<<"Mesh Loaded Successfully!"<<std::endl;
     return 0;
 }
+
+
+int samplingNormal_test(
+	TriMesh& mesh,
+    int index,
+	const Eigen::Matrix3d& d2,
+    const TriMesh::Normal& startnormal,
+    const std::vector<TriMesh::Point>& face_centroid,
+    const std::vector<TriMesh::Normal>& noisy_normals,
+    std::vector<line>& halfedgeset,
+    double sigma_s,
+    float* outputmat,
+    std::vector<int> &ret)
+{
+	
+	for (int i = 0; i < local_sample.size(); i++){
+		//init
+		auto &s = local_sample[i];
+		double glength = sigma_s * 1.0 * s.radius;
+		double clength = 0;
+		int centreface = index;
+
+		TriMesh::Point nowpoint = face_centroid[index];
+		TriMesh::Normal nownormal = startnormal;//direction of geodesics 
+		//compute the direction of geodesics
+		Eigen::AngleAxisd rotation_vector(
+			s.theta, Eigen::Vector3d(
+				noisy_normals[index][0],
+				noisy_normals[index][1],
+				noisy_normals[index][2]
+			)
+		);
+
+		Eigen::Vector3d temp3(nownormal[0],nownormal[1],nownormal[2]);
+		temp3 = rotation_vector * temp3;
+		nownormal = TriMesh::Normal(temp3[0],temp3[1],temp3[2]);
+		nownormal.normalize();
+		
+		if(i == 0){
+			Eigen::Vector3d temp5(
+				noisy_normals[centreface][0],
+				noisy_normals[centreface][1],
+				noisy_normals[centreface][2]	
+			);
+			temp5 = d2 * temp5;
+			outputmat[0] = (float)temp5[0];
+			outputmat[1] = (float)temp5[1];
+			outputmat[2] = (float)temp5[2];
+            ret.push_back(centreface);
+			continue;
+		}
+		std::unordered_set<int> visitedface;
+		TriMesh::FaceHandle nowface(index);
+		int endflag = 0;
+		int halfedgenum = -1;
+		while(endflag == 0){
+			visitedface.insert(nowface.idx());
+			int edgecount = 0;
+			int goflag = 0;
+			for(auto it = mesh.fh_begin(nowface); it != mesh.fh_end(nowface); it++){
+				int nowhalfedge = it->idx();
+				if(nowhalfedge == halfedgenum) continue; //防止跳回来
+
+				edgecount++;
+				auto temppoint = nowpoint + nownormal * sigma_s * 100;
+				TriMesh::Point nextpoint;
+				if(!CalculateLineLineIntersection(halfedgeset[nowhalfedge].v1,halfedgeset[nowhalfedge].v2,nowpoint, temppoint,nextpoint, nownormal)){
+					continue;
+				}
+				goflag = 1;
+				clength += (nextpoint - nowpoint).length();
+
+				if(clength >= glength){
+					Eigen::Vector3d temp5(
+						noisy_normals[nowface.idx()][0],
+						noisy_normals[nowface.idx()][1],
+						noisy_normals[nowface.idx()][2]
+					);
+					temp5 = d2 * temp5;
+					temp5.normalize();
+	
+					outputmat[i * 3 + 0] = (float)temp5[0];
+					outputmat[i * 3 + 1] = (float)temp5[1];
+					outputmat[i * 3 + 2] = (float)temp5[2];
+                    ret.push_back(nowface.idx());
+					endflag = -1;
+					break;
+				}
+				//go to next face
+				nowpoint = nextpoint;
+				halfedgenum = mesh.opposite_halfedge_handle(*it).idx();
+				OpenMesh::FaceHandle nextface = mesh.face_handle(mesh.opposite_halfedge_handle(*it));
+
+				if(nextface.idx() == -1 || visitedface.count(nextface.idx())){
+					endflag = -2;
+					break;
+				}
+
+				Eigen::Matrix3d d = Eigen::Quaterniond::FromTwoVectors(
+					Eigen::Vector3d(noisy_normals[nowface.idx()][0],
+									noisy_normals[nowface.idx()][1],
+									noisy_normals[nowface.idx()][2]),
+					Eigen::Vector3d(noisy_normals[nextface.idx()][0],
+									noisy_normals[nextface.idx()][1],
+									noisy_normals[nextface.idx()][2])
+				).toRotationMatrix();
+				Eigen::Vector3d temp2(nownormal[0], nownormal[1], nownormal[2]);
+				temp2 = d * temp2;
+				nownormal = TriMesh::Normal(temp2[0], temp2[1], temp2[2]);
+				nownormal.normalize();
+
+				nowface = nextface;
+				break;
+			}
+			if ((edgecount == 2 && !goflag && halfedgenum != -1) ||(edgecount == 3 && !goflag && halfedgenum == -1)) {
+				endflag = -4;
+				printf("error: %d %d\n", index, i);
+				return endflag;
+			}
+		}
+	}
+}
+
+int gLSD_test(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3], std::vector<int> &ret)
+{
+
+	// //obtain n*
+	TriMesh::Normal a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
+
+	//obtain polar axis
+	TriMesh::Normal startnormal = getPolarAxis(noisymesh, index, face_centroid);
+
+	//obtain rotation matrix and inverse rotation matrix             
+	Eigen::Matrix3d d2(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(a1.data()[0],
+		a1.data()[1],
+		a1.data()[2]), Eigen::Vector3d(1, 0, 0)));
+
+	Eigen::Matrix3d d2r(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(1, 0, 0), Eigen::Vector3d(a1.data()[0],
+		a1.data()[1],
+		a1.data()[2])));
+
+	//generate LSD
+
+	int err = samplingNormal_test(noisymesh, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat, ret);
+	return err;
+}
+
 int main(){
     outputcache = new float[filesize * sampling_size * 3];
     readmesh(noisymesh, noisymesh_path);
@@ -98,9 +245,15 @@ int main(){
     std::vector<int> traindata = globalSampling(noisymesh, flagz, n_faces);
     
     std::string filen = "sample";
-    for(int i=10;i<=100;i+=10){
-        saveSelectedFacesToPLY(noisymesh, traindata, filen, i);
-        filen = "sample";
-    }
+    // for(int i=10;i<=100;i+=10){
+    //     saveSelectedFacesToPLY(noisymesh, traindata, filen, i);
+    //     filen = "sample";
+    // }
+
+
+    std::vector<int> localSampleResult;
+    gLSD_test(traindata[0], outputcache, localSampleResult);
+    std::string ss="samplingLocal";
+    // saveSelectedFacesToPLY(noisymesh, localSampleResult, ss, 100);
     return 0;
 }
