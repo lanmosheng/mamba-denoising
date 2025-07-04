@@ -1,6 +1,6 @@
-#include"LSD.h"
+#include "LSD.h"
 
-void getFaceNormal(TriMesh& mesh, std::vector<TriMesh::Normal>& normals)
+void getFaceNormal(TriMesh &mesh, std::vector<TriMesh::Normal> &normals)
 {
 	mesh.request_face_normals();
 	mesh.update_face_normals();
@@ -13,7 +13,7 @@ void getFaceNormal(TriMesh& mesh, std::vector<TriMesh::Normal>& normals)
 	}
 }
 
-void getFaceCentroid(TriMesh& mesh, std::vector<TriMesh::Point>& centroid)
+void getFaceCentroid(TriMesh &mesh, std::vector<TriMesh::Point> &centroid)
 {
 	centroid.resize(mesh.n_faces(), TriMesh::Point(0.0, 0.0, 0.0));
 	for (TriMesh::FaceIter f_it = mesh.faces_begin(); f_it != mesh.faces_end(); f_it++)
@@ -23,7 +23,7 @@ void getFaceCentroid(TriMesh& mesh, std::vector<TriMesh::Point>& centroid)
 	}
 }
 
-double getSigmaS(double multiple, std::vector<TriMesh::Point>& centroid, TriMesh& mesh)
+double getSigmaS(double multiple, std::vector<TriMesh::Point> &centroid, TriMesh &mesh)
 {
 	double sigma_s = 0.0, num = 0.0;
 	for (TriMesh::FaceIter f_it = mesh.faces_begin(); f_it != mesh.faces_end(); f_it++)
@@ -48,7 +48,7 @@ void makeRing(TriMesh &mesh, std::vector<ring> &ringlist, int ringnum)
 		int t = f_it->idx();
 		ringlist[t].facelist.clear();
 
-		for (int i = 0; i <ringnum; i++)
+		for (int i = 0; i < ringnum; i++)
 		{
 			neighbor_face_index.clear();
 			ringlist[t].facelist.push_back(f_it->idx());
@@ -59,7 +59,6 @@ void makeRing(TriMesh &mesh, std::vector<ring> &ringlist, int ringnum)
 					for (TriMesh::VertexFaceIter vf_it = mesh.vf_iter(*fv_it); vf_it.is_valid(); vf_it++)
 						neighbor_face_index.insert(vf_it->idx());
 				}
-
 			}
 			ringlist[t].facelist.clear();
 			for (std::set<int>::iterator iter = neighbor_face_index.begin(); iter != neighbor_face_index.end(); ++iter)
@@ -69,15 +68,12 @@ void makeRing(TriMesh &mesh, std::vector<ring> &ringlist, int ringnum)
 
 			for (int j = 0; j < ringlist[t].facelist.size(); j++)
 				ringlist[t].totalring[i].push_back(ringlist[t].facelist[j]);
-
-
-
 		}
 	}
 }
 
-bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& line1Point2,
-	TriMesh::Point& line2Point1, TriMesh::Point& line2Point2, TriMesh::Point& resultSegmentPoint, TriMesh::Normal& nownormal)
+bool CalculateLineLineIntersection(TriMesh::Point &line1Point1, TriMesh::Point &line1Point2,
+								   TriMesh::Point &line2Point1, TriMesh::Point &line2Point2, TriMesh::Point &resultSegmentPoint, TriMesh::Normal &nownormal)
 {
 	TriMesh::Point p1 = line1Point1;
 	TriMesh::Point p2 = line1Point2;
@@ -86,11 +82,13 @@ bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& 
 	TriMesh::Point p13 = p1 - p3;
 	TriMesh::Point p43 = p4 - p3;
 
-	if (p43.length() < 1e-8) {
+	if (p43.length() < 1e-8)
+	{
 		return false;
 	}
 	TriMesh::Point p21 = p2 - p1;
-	if (p21.length() < 1e-8) {
+	if (p21.length() < 1e-8)
+	{
 		return false;
 	}
 
@@ -149,7 +147,7 @@ bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& 
 // void gsupmat()
 // {
 // 	memset(supmat, 0, sizeof(supmat));
-// 	//generate i, j and i^2+j^2 
+// 	//generate i, j and i^2+j^2
 // 	for (int i = 0; i < lsdsize; i++)
 // 		for (int j = 0; j < lsdsize; j++)
 // 		{
@@ -162,86 +160,87 @@ bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& 
 // 	return;
 // }
 
-
 TriMesh::Normal getAveNormal(
-    const ring& cur_ring, 
-    const std::vector<TriMesh::Normal> &noisy_normals, 
-    int current_flag,
-    const std::vector<int>& flagz) 
+	const ring &cur_ring,
+	const std::vector<TriMesh::Normal> &noisy_normals,
+	int current_flag,
+	const std::vector<int> &flagz)
 {
-    TriMesh::Normal a1(0,0,0);
-    for(int ii = 0; ii < cur_ring.totalring[1].size(); ii++){
-        int neighbor_face = cur_ring.totalring[1][ii];
-        if(current_flag < 0){
-            if(flagz[neighbor_face] < 0)
-                a1 += noisy_normals[cur_ring.totalring[1][ii]];
-        }
-        else{
-            a1 += noisy_normals[neighbor_face];
-        }
-    }
-    a1.normalize();
-    return a1;
+	TriMesh::Normal a1(0, 0, 0);
+	for (int ii = 0; ii < cur_ring.totalring[1].size(); ii++)
+	{
+		int neighbor_face = cur_ring.totalring[1][ii];
+		if (current_flag < 0)
+		{
+			if (flagz[neighbor_face] < 0)
+				a1 += noisy_normals[cur_ring.totalring[1][ii]];
+		}
+		else
+		{
+			a1 += noisy_normals[neighbor_face];
+		}
+	}
+	a1.normalize();
+	return a1;
 }
 
-
-TriMesh::Normal getPolarAxis(TriMesh& mesh, int face_index, const std::vector<TriMesh::Point>& face_centroid)
+TriMesh::Normal getPolarAxis(TriMesh &mesh, int face_index, const std::vector<TriMesh::Point> &face_centroid)
 {
 	TriMesh::Point startpoint(0, 0, 0);
-    int cc = 0;
+	int cc = 0;
 
-    for (TriMesh::FaceVertexIter it = mesh.fv_begin(TriMesh::FaceHandle(face_index)); cc <= 1; cc++, it++) {
-        startpoint += mesh.point(*it);
-    }
+	for (TriMesh::FaceVertexIter it = mesh.fv_begin(TriMesh::FaceHandle(face_index)); cc <= 1; cc++, it++)
+	{
+		startpoint += mesh.point(*it);
+	}
 
-    startpoint /= 2.0;
-    TriMesh::Normal startnormal = startpoint - face_centroid[face_index];
-    startnormal.normalize();
+	startpoint /= 2.0;
+	TriMesh::Normal startnormal = startpoint - face_centroid[face_index];
+	startnormal.normalize();
 
-    return startnormal;
+	return startnormal;
 }
 
 int samplingNormal(
-	TriMesh& mesh,
-    int index,
-	const Eigen::Matrix3d& d2,
-    const TriMesh::Normal& startnormal,
-    const std::vector<TriMesh::Point>& face_centroid,
-    const std::vector<TriMesh::Normal>& noisy_normals,
-    std::vector<line>& halfedgeset,
-    double sigma_s,
-    float* outputmat)
+	TriMesh &mesh,
+	int index,
+	const Eigen::Matrix3d &d2,
+	const TriMesh::Normal &startnormal,
+	const std::vector<TriMesh::Point> &face_centroid,
+	const std::vector<TriMesh::Normal> &noisy_normals,
+	std::vector<line> &halfedgeset,
+	double sigma_s,
+	float *outputmat)
 {
-	
-	for (int i = 0; i < local_sample.size(); i++){
-		//init
+
+	for (int i = 0; i < local_sample.size(); i++)
+	{
+		// init
 		auto &s = local_sample[i];
 		double glength = sigma_s * 1.0 * s.radius;
 		double clength = 0;
 		int centreface = index;
 
 		TriMesh::Point nowpoint = face_centroid[index];
-		TriMesh::Normal nownormal = startnormal;//direction of geodesics 
-		//compute the direction of geodesics
+		TriMesh::Normal nownormal = startnormal; // direction of geodesics
+		// compute the direction of geodesics
 		Eigen::AngleAxisd rotation_vector(
 			s.theta, Eigen::Vector3d(
-				noisy_normals[index][0],
-				noisy_normals[index][1],
-				noisy_normals[index][2]
-			)
-		);
+						 noisy_normals[index][0],
+						 noisy_normals[index][1],
+						 noisy_normals[index][2]));
 
-		Eigen::Vector3d temp3(nownormal[0],nownormal[1],nownormal[2]);
+		Eigen::Vector3d temp3(nownormal[0], nownormal[1], nownormal[2]);
 		temp3 = rotation_vector * temp3;
-		nownormal = TriMesh::Normal(temp3[0],temp3[1],temp3[2]);
+		nownormal = TriMesh::Normal(temp3[0], temp3[1], temp3[2]);
 		nownormal.normalize();
-		
-		if(i == 0){
+
+		if (i == 0)
+		{
 			Eigen::Vector3d temp5(
 				noisy_normals[centreface][0],
 				noisy_normals[centreface][1],
-				noisy_normals[centreface][2]	
-			);
+				noisy_normals[centreface][2]);
 			temp5 = d2 * temp5;
 			outputmat[0] = (float)temp5[0];
 			outputmat[1] = (float)temp5[1];
@@ -252,57 +251,62 @@ int samplingNormal(
 		TriMesh::FaceHandle nowface(index);
 		int endflag = 0;
 		int halfedgenum = -1;
-		while(endflag == 0){
+		while (endflag == 0)
+		{
 			visitedface.insert(nowface.idx());
 			int edgecount = 0;
 			int goflag = 0;
-			for(auto it = mesh.fh_begin(nowface); it != mesh.fh_end(nowface); it++){
+			for (auto it = mesh.fh_begin(nowface); it != mesh.fh_end(nowface); it++)
+			{
 				int nowhalfedge = it->idx();
-				if(nowhalfedge == halfedgenum) continue; //防止跳回来
+				if (nowhalfedge == halfedgenum)
+					continue; // 防止跳回来
 
 				edgecount++;
 				auto temppoint = nowpoint + nownormal * sigma_s * 100;
 				TriMesh::Point nextpoint;
-				if(!CalculateLineLineIntersection(halfedgeset[nowhalfedge].v1,halfedgeset[nowhalfedge].v2,nowpoint, temppoint,nextpoint, nownormal)){
+				if (!CalculateLineLineIntersection(halfedgeset[nowhalfedge].v1, halfedgeset[nowhalfedge].v2, nowpoint, temppoint, nextpoint, nownormal))
+				{
 					continue;
 				}
 				goflag = 1;
 				clength += (nextpoint - nowpoint).length();
 
-				if(clength >= glength){
+				if (clength >= glength)
+				{
 					Eigen::Vector3d temp5(
 						noisy_normals[nowface.idx()][0],
 						noisy_normals[nowface.idx()][1],
-						noisy_normals[nowface.idx()][2]
-					);
+						noisy_normals[nowface.idx()][2]);
 					temp5 = d2 * temp5;
 					temp5.normalize();
-	
+
 					outputmat[i * 3 + 0] = (float)temp5[0];
 					outputmat[i * 3 + 1] = (float)temp5[1];
 					outputmat[i * 3 + 2] = (float)temp5[2];
-	
+
 					endflag = -1;
 					break;
 				}
-				//go to next face
+				// go to next face
 				nowpoint = nextpoint;
 				halfedgenum = mesh.opposite_halfedge_handle(*it).idx();
 				OpenMesh::FaceHandle nextface = mesh.face_handle(mesh.opposite_halfedge_handle(*it));
 
-				if(nextface.idx() == -1 || visitedface.count(nextface.idx())){
+				if (nextface.idx() == -1 || visitedface.count(nextface.idx()))
+				{
 					endflag = -2;
 					break;
 				}
 
 				Eigen::Matrix3d d = Eigen::Quaterniond::FromTwoVectors(
-					Eigen::Vector3d(noisy_normals[nowface.idx()][0],
-									noisy_normals[nowface.idx()][1],
-									noisy_normals[nowface.idx()][2]),
-					Eigen::Vector3d(noisy_normals[nextface.idx()][0],
-									noisy_normals[nextface.idx()][1],
-									noisy_normals[nextface.idx()][2])
-				).toRotationMatrix();
+										Eigen::Vector3d(noisy_normals[nowface.idx()][0],
+														noisy_normals[nowface.idx()][1],
+														noisy_normals[nowface.idx()][2]),
+										Eigen::Vector3d(noisy_normals[nextface.idx()][0],
+														noisy_normals[nextface.idx()][1],
+														noisy_normals[nextface.idx()][2]))
+										.toRotationMatrix();
 				Eigen::Vector3d temp2(nownormal[0], nownormal[1], nownormal[2]);
 				temp2 = d * temp2;
 				nownormal = TriMesh::Normal(temp2[0], temp2[1], temp2[2]);
@@ -311,7 +315,8 @@ int samplingNormal(
 				nowface = nextface;
 				break;
 			}
-			if ((edgecount == 2 && !goflag && halfedgenum != -1) ||(edgecount == 3 && !goflag && halfedgenum == -1)) {
+			if ((edgecount == 2 && !goflag && halfedgenum != -1) || (edgecount == 3 && !goflag && halfedgenum == -1))
+			{
 				endflag = -4;
 				printf("error: %d %d\n", index, i);
 				return endflag;
@@ -320,23 +325,28 @@ int samplingNormal(
 	}
 }
 
-std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, const int n_faces){
+std::vector<int> globalSampling(TriMesh &mesh, const std::vector<int> &flagz, const int n_faces)
+{
 	std::unordered_set<int> visited;
 	std::vector<int> ret;
-	
-	auto bfs = [&](int start){
+
+	auto bfs = [&](int start)
+	{
 		std::queue<int> q;
 		q.push(start);
 		visited.insert(start);
 
-		while(!q.empty()){
+		while (!q.empty())
+		{
 			int cur = q.front();
 			q.pop();
 			ret.push_back(cur);
 
-			for(TriMesh::FaceFaceIter ff_it = mesh.ff_begin(TriMesh::FaceHandle(cur)); ff_it.is_valid(); ff_it++){
-				int nxt = ff_it -> idx();
-				if(!visited.count(nxt)){
+			for (TriMesh::FaceFaceIter ff_it = mesh.ff_begin(TriMesh::FaceHandle(cur)); ff_it.is_valid(); ff_it++)
+			{
+				int nxt = ff_it->idx();
+				if (!visited.count(nxt))
+				{
 					visited.insert(nxt);
 					q.push(nxt);
 				}
@@ -344,28 +354,34 @@ std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, co
 		}
 	};
 
-
-	for(int i = 0; i < n_faces; i++){
-		if(visited.count(i)) continue;
-		if(flagz[i] < 0) continue;
+	for (int i = 0; i < n_faces; i++)
+	{
+		if (visited.count(i))
+			continue;
+		if (flagz[i] < 0)
+			continue;
 		bfs(i);
 	}
 
-	for(int i = 0; i < n_faces; i++){
-		if(visited.count(i)) continue;
+	for (int i = 0; i < n_faces; i++)
+	{
+		if (visited.count(i))
+			continue;
 		bfs(i);
 	}
 
-	if (ret.size() != n_faces) {
+	if (ret.size() != n_faces)
+	{
 		std::cerr << "Warning: not all faces included in sampling!" << std::endl;
 	}
 
 	return ret;
 }
 
-void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz) {
-    int n_faces = mesh.n_faces();
-    flagz.resize(n_faces);
+void markBoundaryFaces(TriMesh &mesh, std::vector<int> &flagz)
+{
+	int n_faces = mesh.n_faces();
+	flagz.resize(n_faces);
 	for (TriMesh::FaceIter v_it = mesh.faces_begin(); v_it != mesh.faces_end(); v_it++)
 	{
 		int index = v_it->idx();
@@ -381,7 +397,7 @@ void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz) {
 		{
 			flagz[index] = -1;
 		}
-	} //find the faces on the boundary and mark them with -1
+	} // find the faces on the boundary and mark them with -1
 	for (TriMesh::FaceIter v_it = mesh.faces_begin(); v_it != mesh.faces_end(); v_it++)
 	{
 
@@ -403,8 +419,7 @@ void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz) {
 				break;
 		}
 
-	} //find the faces that their neighbours are on the boundary, and mark them with -2
-
+	} // find the faces that their neighbours are on the boundary, and mark them with -2
 
 	for (TriMesh::FaceIter v_it = mesh.faces_begin(); v_it != mesh.faces_end(); v_it++)
 	{
@@ -416,18 +431,35 @@ void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz) {
 	}
 }
 
-
-void generateLocalSamplingOrder(std::vector <SampleDirection>& local_sample){
+void generateLocalSamplingOrder(std::vector<SampleDirection> &local_sample)
+{
 	local_sample.clear();
-	local_sample.push_back({0,0,0,0,0});
-	for(int i = 1; i <= lsd_r_size; i++){
-		int r = i;
-		int r2 = r * r;
-		for(int j = 0; j < lsd_t_size; j++){
-			float theta = (2.0 * M_PI * j) / lsd_t_size;
-			float x = sin(theta); 
-			float y = cos(theta);
-			local_sample.push_back({x,y,theta,r,r2});
+	local_sample.push_back({0, 0, 0, 0, 0});
+	// for (int i = 1; i <= lsd_r_size; i++)
+	// {
+	// 	double r = i;
+	// 	double r2 = r * r;
+	// 	for (int j = 0; j < lsd_t_size; j++)
+	// 	{
+	// 		double theta = (2.0 * M_PI * j) / (1.0 * lsd_t_size);
+	// 		double x = sin(theta) * r;
+	// 		double y = cos(theta) * r;
+	// 		local_sample.push_back({x, y, theta, r, r2});
+	// 	}
+	// }
+
+	for (int i = 1; i <= lsd_r_size; i++)
+	{
+		for (int j = 1; j <= lsd_r_size; j++)
+		{
+			double x = i - lsd_r_size / 2;
+			double y = j - lsd_t_size / 2;
+			double r2 = x * x + y * y;
+			double r = sqrt(r2);
+			double theta = atan2(y, x);
+			if (theta < 0)
+				theta += 2 * M_PI;
+			local_sample.push_back({x, y, theta, r, r2});
 		}
 	}
 }

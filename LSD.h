@@ -1,6 +1,6 @@
 #include <iostream>
-#include <OpenMesh/Core/IO/MeshIO.hh>  
-#include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>  
+#include <OpenMesh/Core/IO/MeshIO.hh>
+#include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
 #include <OpenMesh/Core/Mesh/PolyMesh_ArrayKernelT.hh>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -13,16 +13,25 @@
 
 const int thread_number = 8;
 extern std::thread td[thread_number];
-const int mt_flag = 1;  
+const int mt_flag = 1;
 // const int lsdsize = 80;
-const int lsd_r_size = 80;
-const int lsd_t_size = 80;
+const int lsd_r_size = 10;
+const int lsd_t_size = 10;
 const int sampling_size = lsd_r_size * lsd_t_size + 1;
 extern float *outputcache;
 // extern int supmat[lsdsize][lsdsize][3];
 
-enum FaceNeighborType { kVertexBased, kEdgeBased, kRadiusBased };
-enum DenoiseType { kLocal, kGlobal };
+enum FaceNeighborType
+{
+	kVertexBased,
+	kEdgeBased,
+	kRadiusBased
+};
+enum DenoiseType
+{
+	kLocal,
+	kGlobal
+};
 
 struct MyTraits : OpenMesh::DefaultTraits
 {
@@ -31,13 +40,13 @@ struct MyTraits : OpenMesh::DefaultTraits
 	typedef OpenMesh::Vec3d Normal;
 
 	// The default 1D texture coordinate type is float.
-	typedef double  TexCoord1D;
+	typedef double TexCoord1D;
 	// The default 2D texture coordinate type is OpenMesh::Vec2f.
-	typedef OpenMesh::Vec2d  TexCoord2D;
+	typedef OpenMesh::Vec2d TexCoord2D;
 	// The default 3D texture coordinate type is OpenMesh::Vec3f.
-	typedef OpenMesh::Vec3d  TexCoord3D;
+	typedef OpenMesh::Vec3d TexCoord3D;
 
-	//enable standart properties
+	// enable standart properties
 	VertexAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal | OpenMesh::Attributes::Color);
 	HalfedgeAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::PrevHalfedge);
 	FaceAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal | OpenMesh::Attributes::Color);
@@ -50,7 +59,6 @@ struct ring
 {
 	std::vector<int> facelist;
 	std::vector<int> totalring[4];
-
 };
 struct line
 {
@@ -58,54 +66,51 @@ struct line
 	TriMesh::Point v2;
 };
 
-
-struct SampleDirection{
+struct SampleDirection
+{
 	double x;
 	double y;
 	double theta;
-	int radius;
-	int r2;
+	double radius;
+	double r2;
 };
 
 extern std::vector<SampleDirection> local_sample;
 
+void getFaceNormal(TriMesh &mesh, std::vector<TriMesh::Normal> &normals);
 
+void getFaceCentroid(TriMesh &mesh, std::vector<TriMesh::Point> &centroid);
 
-
-void getFaceNormal(TriMesh& mesh, std::vector<TriMesh::Normal>& normals);
-
-void getFaceCentroid(TriMesh& mesh, std::vector<TriMesh::Point>& centroid);
-
-double getSigmaS(double multiple, std::vector<TriMesh::Point>& centroid, TriMesh& mesh);
+double getSigmaS(double multiple, std::vector<TriMesh::Point> &centroid, TriMesh &mesh);
 
 void makeRing(TriMesh &mesh, std::vector<ring> &ringlist, int ringnum);
 
-bool CalculateLineLineIntersection(TriMesh::Point& line1Point1, TriMesh::Point& line1Point2,
-	TriMesh::Point& line2Point1, TriMesh::Point& line2Point2, TriMesh::Point& resultSegmentPoint, TriMesh::Normal& nownormal);
+bool CalculateLineLineIntersection(TriMesh::Point &line1Point1, TriMesh::Point &line1Point2,
+								   TriMesh::Point &line2Point1, TriMesh::Point &line2Point2, TriMesh::Point &resultSegmentPoint, TriMesh::Normal &nownormal);
 
-void gsupmat();
+// void gsupmat();
 
 TriMesh::Normal getAveNormal(
-    const ring& cur_ring, 
-    const std::vector<TriMesh::Normal> &noisy_normals, 
-    int current_flag,
-    const std::vector<int>& flagz);
+	const ring &cur_ring,
+	const std::vector<TriMesh::Normal> &noisy_normals,
+	int current_flag,
+	const std::vector<int> &flagz);
 
-TriMesh::Normal getPolarAxis(TriMesh& mesh, int face_index, const std::vector<TriMesh::Point>& face_centroid);
+TriMesh::Normal getPolarAxis(TriMesh &mesh, int face_index, const std::vector<TriMesh::Point> &face_centroid);
 
 int samplingNormal(
-	TriMesh& mesh,
-    int index,
-	const Eigen::Matrix3d& d2,
-    const TriMesh::Normal& startnormal,
-    const std::vector<TriMesh::Point>& face_centroid,
-    const std::vector<TriMesh::Normal>& noisy_normals,
-    std::vector<line>& halfedgeset,
-    double sigma_s,
-    float* outputmat);
+	TriMesh &mesh,
+	int index,
+	const Eigen::Matrix3d &d2,
+	const TriMesh::Normal &startnormal,
+	const std::vector<TriMesh::Point> &face_centroid,
+	const std::vector<TriMesh::Normal> &noisy_normals,
+	std::vector<line> &halfedgeset,
+	double sigma_s,
+	float *outputmat);
 
-std::vector<int> globalSampling(TriMesh& mesh, const std::vector<int>& flagz, const int n_faces);
+std::vector<int> globalSampling(TriMesh &mesh, const std::vector<int> &flagz, const int n_faces);
 
-void markBoundaryFaces(TriMesh& mesh, std::vector<int>& flagz);
+void markBoundaryFaces(TriMesh &mesh, std::vector<int> &flagz);
 
-void generateLocalSamplingOrder(std::vector <SampleDirection>& local_sample);
+void generateLocalSamplingOrder(std::vector<SampleDirection> &local_sample);
