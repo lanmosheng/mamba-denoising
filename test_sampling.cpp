@@ -146,7 +146,6 @@ int samplingNormal_test(
 	std::vector<int> &sample_face,
 	std::vector<MyTraits::Point> &sample_point)
 {
-	std::cout << "Local Sample size:" << local_sample.size() << std::endl;
 
 	for (int i = 0; i < local_sample.size(); i++)
 	{
@@ -157,8 +156,7 @@ int samplingNormal_test(
 		int centreface = index;
 
 		TriMesh::Point nowpoint = face_centroid[index];
-		TriMesh::Normal nownormal = startnormal;
-		// direction of geodesics
+		TriMesh::Normal nownormal = startnormal; // direction of geodesics
 		// compute the direction of geodesics
 		Eigen::AngleAxisd rotation_vector(
 			s.theta, Eigen::Vector3d(
@@ -202,7 +200,8 @@ int samplingNormal_test(
 
 				edgecount++;
 				auto temppoint = nowpoint + nownormal * sigma_s * 100;
-				auto tmpnormal = nownormal;
+				auto tempnormal = nownormal;
+				tempnormal.normalize();
 				TriMesh::Point nextpoint;
 				if (!CalculateLineLineIntersection(halfedgeset[nowhalfedge].v1, halfedgeset[nowhalfedge].v2, nowpoint, temppoint, nextpoint, nownormal))
 				{
@@ -224,7 +223,7 @@ int samplingNormal_test(
 					outputmat[i * 3 + 1] = (float)temp5[1];
 					outputmat[i * 3 + 2] = (float)temp5[2];
 					sample_face.push_back(nowface.idx());
-					sample_point.push_back(nowpoint - tmpnormal * (clength - glength));
+					sample_point.push_back(nextpoint - tempnormal * (clength - glength));
 					endflag = -1;
 					break;
 				}
@@ -263,7 +262,6 @@ int samplingNormal_test(
 			}
 		}
 	}
-
 	return 0;
 }
 
@@ -358,9 +356,6 @@ int main()
 	std::vector<int> localSampleResult;
 	std::vector<MyTraits::Point> localSamplePoint;
 	generateLocalSamplingOrder(local_sample);
-	// saveSampleToPLY(local_sample, folder + "Order" + ".ply");
-	// return 0;
-	// gLSD_test(traindata[0], outputcache, localSampleResult, localSamplePoint);
 	gLSD_test(5178, outputcache, localSampleResult, localSamplePoint);
 	for (int i = 10; i <= 100; i += 10)
 	{

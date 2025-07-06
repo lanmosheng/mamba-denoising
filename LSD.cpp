@@ -435,30 +435,15 @@ void generateLocalSamplingOrder(std::vector<SampleDirection> &local_sample)
 {
 	local_sample.clear();
 	local_sample.push_back({0, 0, 0, 0, 0});
-	// for (int i = 1; i <= lsd_r_size; i++)
-	// {
-	// 	double r = i;
-	// 	double r2 = r * r;
-	// 	for (int j = 0; j < lsd_t_size; j++)
-	// 	{
-	// 		double theta = (2.0 * M_PI * j) / (1.0 * lsd_t_size);
-	// 		double x = sin(theta) * r;
-	// 		double y = cos(theta) * r;
-	// 		local_sample.push_back({x, y, theta, r, r2});
-	// 	}
-	// }
-
 	for (int i = 1; i <= lsd_r_size; i++)
 	{
-		for (int j = 1; j <= lsd_r_size; j++)
+		double r = i;
+		double r2 = r * r;
+		for (int j = 0; j < lsd_t_size; j++)
 		{
-			double x = i - lsd_r_size / 2;
-			double y = j - lsd_t_size / 2;
-			double r2 = x * x + y * y;
-			double r = sqrt(r2);
-			double theta = atan2(y, x);
-			if (theta < 0)
-				theta += 2 * M_PI;
+			double theta = (2.0 * M_PI * j) / (1.0 * lsd_t_size);
+			double x = sin(theta) * r;
+			double y = cos(theta) * r;
 			local_sample.push_back({x, y, theta, r, r2});
 		}
 	}
