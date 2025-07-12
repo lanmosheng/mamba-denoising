@@ -1,4 +1,4 @@
-#include"LSD.h"
+#include "LSD.h"
 
 std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
@@ -33,7 +33,7 @@ std::vector<int> flagz;
 
 std::vector<Eigen::Matrix3d> msave;
 std::vector<int> errorflag;
-std::vector<FILE*> filepo;
+std::vector<FILE *> filepo;
 
 int gLSD(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3])
 {
@@ -41,21 +41,22 @@ int gLSD(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3])
 	// //obtain n*
 	TriMesh::Normal a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
 
-	//obtain polar axis
+	// obtain polar axis
 	TriMesh::Normal startnormal = getPolarAxis(noisemesh, index, face_centroid);
 
-	//obtain rotation matrix and inverse rotation matrix             
+	// obtain rotation matrix and inverse rotation matrix
 	Eigen::Matrix3d d2(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(a1.data()[0],
-		a1.data()[1],
-		a1.data()[2]), Eigen::Vector3d(1, 0, 0)));
+																		  a1.data()[1],
+																		  a1.data()[2]),
+														  Eigen::Vector3d(1, 0, 0)));
 
 	Eigen::Matrix3d d2r(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(1, 0, 0), Eigen::Vector3d(a1.data()[0],
-		a1.data()[1],
-		a1.data()[2])));
+																									 a1.data()[1],
+																									 a1.data()[2])));
 
 	msave[index] = d2r;
 
-	//generate LSD
+	// generate LSD
 
 	int err = samplingNormal(noisemesh, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat);
 	return err;
@@ -108,7 +109,7 @@ int preprocessing()
 
 	errorflag.resize(noisemesh.n_faces());
 	msave.resize(noisemesh.n_faces());
-	
+
 	for (TriMesh::HalfedgeIter it = noisemesh.halfedges_begin(); it != noisemesh.halfedges_end(); it++)
 	{
 		halfedgeset[(*it).idx()].v1 = noisemesh.point(noisemesh.from_vertex_handle(*it));
@@ -119,14 +120,13 @@ int preprocessing()
 	getFaceCentroid(noisemesh, face_centroid);
 	sigma_s = getSigmaS(2, face_centroid, noisemesh) / 8;
 	markBoundaryFaces(noisemesh, flagz);
-	
 
 	return 0;
 }
 
 int goutputfile(int nface, int ncase)
 {
-	int nfile = nface%ncase ? nface / ncase + 1 : nface / ncase;
+	int nfile = nface % ncase ? nface / ncase + 1 : nface / ncase;
 
 	filepo.resize(nfile);
 	FILE *namelist = fopen("list.txt", "w");
@@ -134,9 +134,10 @@ int goutputfile(int nface, int ncase)
 	for (int i = 0; i < nfile; i++)
 	{
 		std::string dir = "./data/";
-		std::string  temps = dir + std::to_string(i) + ".bin";
+		std::string temps = dir + std::to_string(i) + ".bin";
 		filepo[i] = fopen(temps.c_str(), "wb");
-		if(filepo[i] == nullptr){
+		if (filepo[i] == nullptr)
+		{
 			printf("Error opening file: %s\n", temps.c_str());
 			fclose(namelist);
 			return -1;
@@ -146,7 +147,7 @@ int goutputfile(int nface, int ncase)
 	fclose(namelist);
 	return 0;
 }
-int closeall(std::vector<FILE*> &filepo)
+int closeall(std::vector<FILE *> &filepo)
 {
 	for (int i = 0; i < filepo.size(); i++)
 	{
@@ -172,7 +173,7 @@ std::string gofn(std::string input, int ifv)
 	}
 	std::string temp2 = input.substr(len - 4 - 3, 3);
 
-	if (temp2[0] == '_'&&temp2[1] >= '0'&&temp2[1] <= '9'&&temp2[2] >= '0'&&temp2[2] <= '9')
+	if (temp2[0] == '_' && temp2[1] >= '0' && temp2[1] <= '9' && temp2[2] >= '0' && temp2[2] <= '9')
 	{
 
 		int itn = (temp2[1] - '0') * 10 + (temp2[2] - '0');
@@ -201,15 +202,13 @@ void threadprocess(int p)
 		int index = thread_p[p][i].index;
 		int count = thread_p[p][i].count;
 
-		if (gLSD(index, outputcache + count* sampling_size * 3) == -4)
+		if (gLSD(index, outputcache + count * sampling_size * 3) == -4)
 			errorflag[index] = 1;
 		else
 			errorflag[index] = 0;
-
 	}
-
 }
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 	int profile_num = 0;
 	int numberofmesh = 0;
@@ -218,7 +217,7 @@ int main(int argc, char* argv[])
 	char modelpath[5][100];
 	srand(0);
 
-	FILE* profile;
+	FILE *profile;
 	if (argc == 2)
 	{
 		profile = fopen(argv[1], "r");
@@ -228,8 +227,6 @@ int main(int argc, char* argv[])
 		printf("profile error\n");
 		return 0;
 	}
-
-
 
 	fscanf(profile, "%d", &numberofmodel);
 	for (int i = 0; i < numberofmodel; i++)
@@ -248,7 +245,7 @@ int main(int argc, char* argv[])
 
 	generateLocalSamplingOrder(local_sample);
 
-	//read noisy meshes 
+	// read noisy meshes
 	printf("read mesh\n");
 	noisemesh.clean();
 	outputcache = new float[filesize * sampling_size * 3];
@@ -286,21 +283,25 @@ int main(int argc, char* argv[])
 			memset(outputcache, 0, filesize * sampling_size * 3 * sizeof(float));
 			for (int k1 = 0; k1 < thread_number; k1++)
 				thread_p[k1].clear();
-			
-			//write the LSD of all the faces to files
+
+			// write the LSD of all the faces to files
 			int n_faces = noisemesh.n_faces();
 			std::vector<int> sorted_face_order = globalSampling(noisemesh, flagz, n_faces);
-			
-			for(int i = 0; i < n_faces; i++){
+
+			for (int i = 0; i < n_faces; i++)
+			{
 				int face_idx = sorted_face_order[i];
 				thread_p[count % thread_number].push_back(pid(face_idx, count));
 				count++;
 
-				if(count == filesize || i == n_faces - 1){
-					for(int k2 = 0; k2 < thread_number; k2++){
+				if (count == filesize || i == n_faces - 1)
+				{
+					for (int k2 = 0; k2 < thread_number; k2++)
+					{
 						td[k2] = std::thread(threadprocess, k2);
 					}
-					for(int k2 = 0; k2 < thread_number; k2++){
+					for (int k2 = 0; k2 < thread_number; k2++)
+					{
 						td[k2].join();
 					}
 					fwrite(outputcache, sizeof(float), count * sampling_size * 3, filepo[fcount]);
@@ -315,7 +316,7 @@ int main(int argc, char* argv[])
 
 			closeall(filepo);
 
-			//call python to compute the normalized denoised normals
+			// call python to compute the normalized denoised normals
 			std::string pycmd = "python denoising.py ";
 			pycmd += std::string(modelpath[iter]) + " list.txt";
 
@@ -327,25 +328,25 @@ int main(int argc, char* argv[])
 			fread(nomralcache, sizeof(float), noisemesh.n_faces() * 3, nf);
 			fclose(nf);
 
-			for (int iterf = 0; iterf<noisemesh.n_faces(); iterf++)
+			for (int iterf = 0; iterf < noisemesh.n_faces(); iterf++)
 			{
-				if (errorflag[iterf] == 0)
+				int nowface_id = sorted_face_order[iterf];
+				if (errorflag[nowface_id] == 0)
 				{
 					Eigen::Vector3d tt(nomralcache[iterf * 3], nomralcache[iterf * 3 + 1], nomralcache[iterf * 3 + 2]);
-					tt = msave[iterf] * tt;
+					tt = msave[nowface_id] * tt;
 
-					filtered_normals[iterf] = TriMesh::Point(tt.data()[0], tt.data()[1], tt.data()[2]);
-					filtered_normals[iterf].normalized();
+					filtered_normals[nowface_id] = TriMesh::Point(tt.data()[0], tt.data()[1], tt.data()[2]);
+					filtered_normals[nowface_id].normalize();
 				}
 
 				else
 				{
-					filtered_normals[iterf] = noisy_normals[iterf];
+					filtered_normals[nowface_id] = noisy_normals[nowface_id];
 				}
 			}
 			delete nomralcache;
 
-			
 			updateVertexPosition(noisemesh, filtered_normals, ivn, false);
 			std::string outfilename = gofn(mesh_n, iter);
 			OpenMesh::IO::write_mesh(noisemesh, outfilename);
@@ -355,4 +356,3 @@ int main(int argc, char* argv[])
 	delete outputcache;
 	return 0;
 }
-
