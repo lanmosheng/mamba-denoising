@@ -318,7 +318,7 @@ int main(int argc, char *argv[])
 
 			// call python to compute the normalized denoised normals
 			std::string pycmd = "python denoising.py ";
-			pycmd += std::string(modelpath[iter]) + " list.txt";
+			pycmd += std::string(modelpath[iter]) + " list.txt " + std::to_string(sampling_size);
 
 			system(pycmd.c_str());
 

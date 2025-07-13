@@ -8,9 +8,9 @@ import coder
 # General config
 # Datasets
 
-def get_model(device):
+def get_model(device, sampling_size=501):
 
-    predictor = coder.ResNet([4,4,4])
+    predictor = coder.MambaNet(num_patches=sampling_size)
     model = coder.Network(predictor, device=device)
     return model
 

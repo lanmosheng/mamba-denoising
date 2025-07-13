@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import numpy as np
-
+from mamba_ssm import Mamba
 
 class ResUnit(nn.Module):
     def __init__(self, channel):
@@ -90,3 +90,35 @@ class Network(nn.Module):
         return output
 
 
+class MambaNet(nn.Module):
+    def __init__(self, num_patches=501, d_model=64, d_state=16, d_conv=4, expand=2, depth=6):
+        super().__init__()
+        self.num_patches = num_patches
+        self.input_proj = nn.Linear(3, d_model)
+
+        self.mamba_layers = nn.ModuleList([
+            Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
+            for _ in range(depth)
+        ])
+
+        self.output_head = nn.Sequential(
+            nn.Linear(d_model, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Linear(128, 3),
+            nn.Tanh()
+        )
+
+    def forward(self, x):
+        # x: [B, num_patches, 3]
+        assert x.shape[1] == self.num_patches, \
+            f"Expected {self.num_patches} patches, but got {x.shape[1]}"
+
+        x = self.input_proj(x)  # [B, num_patches, d_model]
+
+        for layer in self.mamba_layers:
+            x = layer(x)
+
+        x = x.mean(dim=1)  # 聚合每个 patch 表征 → [B, d_model]
+        x = self.output_head(x)  # → [B, 3]
+        return x

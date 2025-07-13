@@ -18,10 +18,11 @@ if __name__ == '__main__':
     is_cuda = (torch.cuda.is_available() )
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    listfile=open(sys.argv[2],"r")
-    
-    
-    model = config.get_model(device)
+    listfile = open(sys.argv[2],"r")
+    sampling_size = int(sys.argv[3]) 
+    print("Using sampling size = ", sampling_size)
+
+    model = config.get_model(device, sampling_size)
     model.eval()
     checkpoint_io = CheckpointIO(sys.argv[1], model=model)
     try:
@@ -35,7 +36,7 @@ if __name__ == '__main__':
 
     for i in range(filenumber):
         filename=listfile.readline().strip('\n')
-        data=np.fromfile(filename,dtype="float32").reshape((-1,80,80,3))
+        data=np.fromfile(filename,dtype="float32").reshape((-1,sampling_size,3))
 
         d_split = np.array_split(data, 10, axis=0)
         for j in range(len(d_split)):
