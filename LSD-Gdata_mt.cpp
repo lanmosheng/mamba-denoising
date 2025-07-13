@@ -1,4 +1,4 @@
-#include"LSD.h"
+#include "LSD.h"
 
 std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
@@ -36,25 +36,26 @@ std::vector<std::vector<TriMesh::Point>> face_centroid_list;
 std::vector<std::vector<TriMesh::Normal>> filtered_normals_list;
 std::vector<std::vector<int>> flagz_list;
 
-int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size*3], float groundtruth[3],
-	double sigma_s,
-	std::vector<ring> &ringlist,
-	std::vector<TriMesh::Normal> &filtered_normals,
-	std::vector<line> &halfedgeset,
-	std::vector<TriMesh::Normal> &noisy_normals,
-	std::vector<TriMesh::Point> &face_centroid,
-	std::vector<int> &flagz)
+int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size * 3], float groundtruth[3],
+		 double sigma_s,
+		 std::vector<ring> &ringlist,
+		 std::vector<TriMesh::Normal> &filtered_normals,
+		 std::vector<line> &halfedgeset,
+		 std::vector<TriMesh::Normal> &noisy_normals,
+		 std::vector<TriMesh::Point> &face_centroid,
+		 std::vector<int> &flagz)
 {
 	// //obtain n*
 	TriMesh::Normal a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
 
-	//obtain polar axis
+	// obtain polar axis
 	TriMesh::Normal startnormal = getPolarAxis(mesh2, index, face_centroid);
 
-	//obtain rotation matrix and rotated ground truth
+	// obtain rotation matrix and rotated ground truth
 	Eigen::Matrix3d d2(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(a1.data()[0],
-		a1.data()[1],
-		a1.data()[2]), Eigen::Vector3d(1, 0, 0)));
+																		  a1.data()[1],
+																		  a1.data()[2]),
+														  Eigen::Vector3d(1, 0, 0)));
 
 	Eigen::Vector3d gtnormal(filtered_normals[index].data()[0], filtered_normals[index].data()[1], filtered_normals[index].data()[2]);
 	gtnormal = d2 * gtnormal;
@@ -64,47 +65,49 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size*3], float grou
 	groundtruth[1] = (float)gtnormal[1];
 	groundtruth[2] = (float)gtnormal[2];
 
-	//generate LSD
+	// generate LSD
 	int err = samplingNormal(mesh2, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat);
 	return err;
 }
 
 int preprocessing(
-    TriMesh& mesh,               // GT mesh
-    TriMesh& noisemesh,          // noisy mesh
-    std::vector<ring>& ringlist,
-    std::vector<TriMesh::Normal>& noisy_normals,
-    std::vector<TriMesh::Normal>& filtered_normals,
-    std::vector<TriMesh::Point>& face_centroid,
-    std::vector<line>& halfedgeset,
-    std::vector<int>& flagz,
-    double& sigma_s,
-    std::vector<std::pair<int, int>>& traindata,
-    int nom)
+	TriMesh &mesh,		// GT mesh
+	TriMesh &noisemesh, // noisy mesh
+	std::vector<ring> &ringlist,
+	std::vector<TriMesh::Normal> &noisy_normals,
+	std::vector<TriMesh::Normal> &filtered_normals,
+	std::vector<TriMesh::Point> &face_centroid,
+	std::vector<line> &halfedgeset,
+	std::vector<int> &flagz,
+	double &sigma_s,
+	std::vector<std::pair<int, int>> &traindata,
+	int nom)
 {
-	
+
 	ringlist.resize(mesh.n_faces());
-    noisy_normals.resize(mesh.n_faces());
-    face_centroid.resize(mesh.n_faces());
-    filtered_normals.resize(mesh.n_faces());
-    halfedgeset.resize(noisemesh.n_halfedges());
+	noisy_normals.resize(mesh.n_faces());
+	face_centroid.resize(mesh.n_faces());
+	filtered_normals.resize(mesh.n_faces());
+	halfedgeset.resize(noisemesh.n_halfedges());
 
-    for (TriMesh::HalfedgeIter it = noisemesh.halfedges_begin(); it != noisemesh.halfedges_end(); ++it) {
-        halfedgeset[it->idx()].v1 = noisemesh.point(noisemesh.from_vertex_handle(*it));
-        halfedgeset[it->idx()].v2 = noisemesh.point(noisemesh.to_vertex_handle(*it));
-    }
+	for (TriMesh::HalfedgeIter it = noisemesh.halfedges_begin(); it != noisemesh.halfedges_end(); ++it)
+	{
+		halfedgeset[it->idx()].v1 = noisemesh.point(noisemesh.from_vertex_handle(*it));
+		halfedgeset[it->idx()].v2 = noisemesh.point(noisemesh.to_vertex_handle(*it));
+	}
 
-    makeRing(mesh, ringlist, 3);
-    getFaceNormal(mesh, filtered_normals);
-    getFaceNormal(noisemesh, noisy_normals);
-    getFaceCentroid(noisemesh, face_centroid);
-    sigma_s = getSigmaS(2, face_centroid, noisemesh) / 8;
-    markBoundaryFaces(mesh, flagz);
+	makeRing(mesh, ringlist, 3);
+	getFaceNormal(mesh, filtered_normals);
+	getFaceNormal(noisemesh, noisy_normals);
+	getFaceCentroid(noisemesh, face_centroid);
+	sigma_s = getSigmaS(2, face_centroid, noisemesh);
+	markBoundaryFaces(mesh, flagz);
 
 	std::vector<int> sorted_face_order = globalSampling(mesh, flagz, mesh.n_faces());
-    for (int idx : sorted_face_order){
-        traindata.push_back(std::pair<int, int>(nom, idx));
-    }
+	for (int idx : sorted_face_order)
+	{
+		traindata.push_back(std::pair<int, int>(nom, idx));
+	}
 
 	return 0;
 }
@@ -118,18 +121,16 @@ void threadprocess(int p)
 		int count = thread_p[p][i].count;
 
 		gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]);
-
 	}
-
 }
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 	int profile_num = 0;
 	int numberofmesh = 0;
-	
+
 	srand(0);
 
-	FILE* profile;
+	FILE *profile;
 	if (argc == 2)
 	{
 		profile = fopen(argv[1], "r");
@@ -158,8 +159,7 @@ int main(int argc, char* argv[])
 	char outputflagname[200];
 	char mesh_n[200];
 
-
-	//read ground truth meshes 
+	// read ground truth meshes
 	printf("read mesh\n");
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
 			return 0;
 		}
 	}
-	//read noisy meshes 
+	// read noisy meshes
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
 		fscanf(profile, "%s", mesh_n);
@@ -188,7 +188,8 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	for (int nom = 0; nom < numberofmesh; nom++){
+	for (int nom = 0; nom < numberofmesh; nom++)
+	{
 		preprocessing(
 			meshlist[nom],
 			noisemeshlist[nom],
@@ -200,17 +201,15 @@ int main(int argc, char* argv[])
 			flagz_list[nom],
 			sigma_s_list[nom],
 			traindata,
-			nom
-		);
+			nom);
 	}
 
-	int px[5];  //parameters for gdata 
+	int px[5]; // parameters for gdata
 	// 0,1,2: the index range of output files groups, range(10, 20, 2) = 10, 12, 14, 16, 18
 	// 3: the number of LSD in each group
 	// 4: the number of LSD in each file
-	fscanf(profile, "%s", outputname);  //name and path of training files
+	fscanf(profile, "%s", outputname);	   // name and path of training files
 	fscanf(profile, "%s", outputflagname); // name and path of ground truth files
-
 
 	for (int i = 0; i < 5; i++)
 		fscanf(profile, "%d", &px[i]);
@@ -230,14 +229,12 @@ int main(int argc, char* argv[])
 	outputcache = new float[px[4] * sampling_size * 3];
 	gtcache = new float[px[4] * 3];
 	memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
-	memset(gtcache, 0, px[4] * 3*sizeof(float));
-	
-	
+	memset(gtcache, 0, px[4] * 3 * sizeof(float));
+
 	std::random_shuffle(traindata.begin(), traindata.end());
 	printf("Total face number: %d\n", traindata.size());
 
 	generateLocalSamplingOrder(local_sample);
-
 
 	int ttx = -1;
 
@@ -253,9 +250,9 @@ int main(int argc, char* argv[])
 		outputflagname[strlen(outputflagname) - 8] = k0 % 10 + '0';
 		outputname[strlen(outputname) - 6] = '0';
 		outputname[strlen(outputname) - 5] = '0';
-		outputflagname[strlen(outputflagname) - 6] =  '0';
-		outputflagname[strlen(outputflagname) - 5] =  '0';
-		if (mt_flag==0)
+		outputflagname[strlen(outputflagname) - 6] = '0';
+		outputflagname[strlen(outputflagname) - 5] = '0';
+		if (mt_flag == 0)
 		{
 			for (int k1 = 0; k1 < px[3];)
 			{
@@ -265,11 +262,10 @@ int main(int argc, char* argv[])
 				int index = traindata[ttx].second;
 				int meshidx = traindata[ttx].first;
 
-				if (gLSD(index, noisemeshlist[meshidx], outputcache + count* sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
+				if (gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
 					continue;
 				else
 					k1++;
-
 
 				count++;
 				if (count == px[4])
@@ -278,8 +274,8 @@ int main(int argc, char* argv[])
 					outputname[strlen(outputname) - 5] = fcount % 10 + '0';
 					outputflagname[strlen(outputflagname) - 6] = fcount / 10 + '0';
 					outputflagname[strlen(outputflagname) - 5] = fcount % 10 + '0';
-					FILE* outfile1 = fopen(outputname, "wb");
-					FILE* outfile2 = fopen(outputflagname, "wb");
+					FILE *outfile1 = fopen(outputname, "wb");
+					FILE *outfile2 = fopen(outputflagname, "wb");
 
 					fwrite(outputcache, sizeof(float), px[4] * sampling_size * 3, outfile1);
 					fwrite(gtcache, sizeof(float), px[4] * 3, outfile2);
@@ -290,7 +286,6 @@ int main(int argc, char* argv[])
 
 					memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
 					memset(gtcache, 0, px[4] * 3 * sizeof(float));
-
 				}
 			}
 		}
@@ -305,7 +300,7 @@ int main(int argc, char* argv[])
 					ttx = 0;
 				int index = traindata[ttx].second;
 				int meshidx = traindata[ttx].first;
-				thread_p[count%thread_number].push_back(pid(index, meshidx, count));
+				thread_p[count % thread_number].push_back(pid(index, meshidx, count));
 				count++;
 				k1++;
 				if (count == px[4])
@@ -322,8 +317,8 @@ int main(int argc, char* argv[])
 					outputname[strlen(outputname) - 5] = fcount % 10 + '0';
 					outputflagname[strlen(outputflagname) - 6] = fcount / 10 + '0';
 					outputflagname[strlen(outputflagname) - 5] = fcount % 10 + '0';
-					FILE* outfile1 = fopen(outputname, "wb");
-					FILE* outfile2 = fopen(outputflagname, "wb");
+					FILE *outfile1 = fopen(outputname, "wb");
+					FILE *outfile2 = fopen(outputflagname, "wb");
 
 					fwrite(outputcache, sizeof(float), px[4] * sampling_size * 3, outfile1);
 					fwrite(gtcache, sizeof(float), px[4] * 3, outfile2);
@@ -344,10 +339,8 @@ int main(int argc, char* argv[])
 			printf("error\n");
 			return 0;
 		}
-
 	}
 	delete outputcache;
 	delete gtcache;
 	return 0;
 }
-

@@ -118,7 +118,7 @@ int preprocessing()
 	makeRing(noisemesh, ringlist, 3);
 	getFaceNormal(noisemesh, noisy_normals);
 	getFaceCentroid(noisemesh, face_centroid);
-	sigma_s = getSigmaS(2, face_centroid, noisemesh) / 8;
+	sigma_s = getSigmaS(2, face_centroid, noisemesh);
 	markBoundaryFaces(noisemesh, flagz);
 
 	return 0;
