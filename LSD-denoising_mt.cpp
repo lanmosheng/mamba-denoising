@@ -58,7 +58,7 @@ int gLSD(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3])
 
 	// generate LSD
 
-	int err = samplingNormal(noisemesh, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat);
+	int err = samplingNormal(noisemesh, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, local_sample, outputmat);
 	return err;
 }
 void updateVertexPosition(TriMesh &mesh, std::vector<TriMesh::Normal> &filtered_normals, int iteration_number, bool fixed_boundary)

@@ -13,7 +13,7 @@
 
 const int thread_number = 8;
 extern std::thread td[thread_number];
-const int mt_flag = 1;
+const int mt_flag = 0;
 // const int lsdsize = 80;
 const int lsd_r_size = 50;
 const int lsd_t_size = 100;
@@ -68,11 +68,11 @@ struct line
 
 struct SampleDirection
 {
-	double x;
-	double y;
-	double theta;
-	double radius;
-	double r2;
+	float x;
+	float y;
+	float theta;
+	float radius;
+	float r2;
 };
 
 extern std::vector<SampleDirection> local_sample;
@@ -107,6 +107,7 @@ int samplingNormal(
 	const std::vector<TriMesh::Normal> &noisy_normals,
 	std::vector<line> &halfedgeset,
 	double sigma_s,
+	std::vector<SampleDirection> &local_sample,
 	float *outputmat);
 
 std::vector<int> globalSampling(TriMesh &mesh, const std::vector<int> &flagz, const int n_faces);

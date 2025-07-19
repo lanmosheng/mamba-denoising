@@ -35,7 +35,7 @@ compile_app() {
         -I "${EIGEN_PATH}" \
         -L "${OPENMESH_LIB}" \
         -lOpenMeshCore \
-        -O2 \
+        -O0 \
         -o ${app_name} \
         -pthread \
         -Wl,-rpath,'$ORIGIN/thirdparty/OpenMesh-8.1/build/Build/lib'  # 设置rpath

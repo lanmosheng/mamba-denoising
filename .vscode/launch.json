@@ -1,7 +1,29 @@
 {
-    // 使用 IntelliSense 了解相关属性。 
-    // 悬停以查看现有属性的描述。
-    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": []
-}
+    "configurations": [
+      {
+        "name": "Remote Debug Gdata",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/LSD-Gdata_mt", // 可执行文件的路径（服务器上的路径）
+        "args": ["profile/s_i1/test_profile1.txt"],   // 程序运行参数
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",                 // 工作目录（通常为程序所在目录）
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "gdb",
+        "miDebuggerPath": "/usr/bin/gdb",            // 确保服务器上存在该路径
+        "setupCommands": [
+          {
+            "description": "Enable pretty-printing",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          }
+        ],
+        "logging": {
+          "engineLogging": true
+        }
+      }
+    ]
+  }
+  

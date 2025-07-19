@@ -210,13 +210,19 @@ int samplingNormal(
 	const std::vector<TriMesh::Normal> &noisy_normals,
 	std::vector<line> &halfedgeset,
 	double sigma_s,
+	std::vector<SampleDirection> &local_sample,
 	float *outputmat)
 {
 
 	for (int i = 0; i < local_sample.size(); i++)
 	{
+		if (i * 3 + 2 >= sampling_size * 3)
+		{
+			std::cerr << "Out of range !!!!";
+		}
 		// init
-		auto &s = local_sample[i];
+		printf("[DEBUG] i = %d\n", i);
+		SampleDirection s = local_sample[i];
 		double glength = sigma_s * 1.0 * s.radius;
 		double clength = 0;
 		int centreface = index;
@@ -226,9 +232,9 @@ int samplingNormal(
 		// compute the direction of geodesics
 		Eigen::AngleAxisd rotation_vector(
 			s.theta, Eigen::Vector3d(
-						 noisy_normals[index][0],
-						 noisy_normals[index][1],
-						 noisy_normals[index][2]));
+						 noisy_normals[index].data()[0],
+						 noisy_normals[index].data()[1],
+						 noisy_normals[index].data()[2]));
 
 		Eigen::Vector3d temp3(nownormal[0], nownormal[1], nownormal[2]);
 		temp3 = rotation_vector * temp3;
@@ -238,9 +244,9 @@ int samplingNormal(
 		if (i == 0)
 		{
 			Eigen::Vector3d temp5(
-				noisy_normals[centreface][0],
-				noisy_normals[centreface][1],
-				noisy_normals[centreface][2]);
+				noisy_normals[centreface].data()[0],
+				noisy_normals[centreface].data()[1],
+				noisy_normals[centreface].data()[2]);
 			temp5 = d2 * temp5;
 			outputmat[0] = (float)temp5[0];
 			outputmat[1] = (float)temp5[1];
@@ -437,13 +443,13 @@ void generateLocalSamplingOrder(std::vector<SampleDirection> &local_sample)
 	local_sample.push_back({0, 0, 0, 0, 0});
 	for (int i = 1; i <= lsd_r_size; i++)
 	{
-		double r = i;
-		double r2 = r * r;
+		float r = i;
+		float r2 = r * r;
 		for (int j = 0; j < lsd_t_size; j++)
 		{
-			double theta = (2.0 * M_PI * j) / (1.0 * lsd_t_size);
-			double x = sin(theta) * r;
-			double y = cos(theta) * r;
+			float theta = (2.0 * M_PI * j) / (1.0 * lsd_t_size);
+			float x = sin(theta) * r;
+			float y = cos(theta) * r;
 			local_sample.push_back({x, y, theta, r, r2});
 		}
 	}

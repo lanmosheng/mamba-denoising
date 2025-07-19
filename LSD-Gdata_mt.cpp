@@ -2,7 +2,7 @@
 
 std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
-float *outputcache;
+float *outputcache = nullptr;
 
 float *gtcache;
 struct pid
@@ -66,7 +66,7 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size * 3], float gr
 	groundtruth[2] = (float)gtnormal[2];
 
 	// generate LSD
-	int err = samplingNormal(mesh2, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, outputmat);
+	int err = samplingNormal(mesh2, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, local_sample, outputmat);
 	return err;
 }
 
@@ -231,7 +231,6 @@ int main(int argc, char *argv[])
 	memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
 	memset(gtcache, 0, px[4] * 3 * sizeof(float));
 
-	std::random_shuffle(traindata.begin(), traindata.end());
 	printf("Total face number: %d\n", traindata.size());
 
 	generateLocalSamplingOrder(local_sample);
