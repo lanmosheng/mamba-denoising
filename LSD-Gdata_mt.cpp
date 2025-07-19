@@ -4,6 +4,8 @@ std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
 float *outputcache = nullptr;
 
+// std::vector<float> outputcache;
+
 float *gtcache;
 struct pid
 {
