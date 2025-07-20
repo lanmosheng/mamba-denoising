@@ -343,5 +343,6 @@ int main(int argc, char *argv[])
 	}
 	delete outputcache;
 	delete gtcache;
+	printf("Gdata Over!");
 	return 0;
 }

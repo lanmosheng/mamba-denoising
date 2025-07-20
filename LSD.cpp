@@ -216,12 +216,7 @@ int samplingNormal(
 
 	for (int i = 0; i < local_sample.size(); i++)
 	{
-		if (i * 3 + 2 >= sampling_size * 3)
-		{
-			std::cerr << "Out of range !!!!";
-		}
 		// init
-		printf("[DEBUG] i = %d\n", i);
 		SampleDirection s = local_sample[i];
 		double glength = sigma_s * 1.0 * s.radius;
 		double clength = 0;
@@ -329,6 +324,7 @@ int samplingNormal(
 			}
 		}
 	}
+	return 1;
 }
 
 std::vector<int> globalSampling(TriMesh &mesh, const std::vector<int> &flagz, const int n_faces)
