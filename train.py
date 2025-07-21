@@ -21,8 +21,7 @@ if __name__ == '__main__':
     np.random.seed(0)
     # Set t0
     t0 = time.time()
-
-    model = config.get_model(device)
+    model = config.get_model(device, 5001)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     trainer = Trainer(model, optimizer, device=device)
     # Shorthands
@@ -31,14 +30,17 @@ if __name__ == '__main__':
     checkpoint_io = CheckpointIO(out_dir, model=model, optimizer=optimizer)
     try:
         load_dict = checkpoint_io.load('model.pt')
-    except FileExistsError:
+        print("Resumed training from checkpoint.")
+    except FileNotFoundError:
         load_dict = dict()
+        print("No checkpoint found. Starting training from scratch.")
     epoch_it = load_dict.get('epoch_it', -1)
     it = load_dict.get('it', -1)
     metric_val_best = np.inf
 
     logger = SummaryWriter(os.path.join(out_dir, 'logs'))
-    batch_size=80
+    batch_size=2
+
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
@@ -55,6 +57,7 @@ if __name__ == '__main__':
         
         for i in range(train_loader.length()):
             tdata, tlabel=train_loader.generate_batch(i)
+            print(tdata.shape)
             for j in range(tdata.shape[0]):
                 loss = trainer.train_step(tdata[j], tlabel[j])
                 logger.add_scalar('train/loss', loss, it)

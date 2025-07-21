@@ -13,7 +13,7 @@
 
 const int thread_number = 8;
 extern std::thread td[thread_number];
-const int mt_flag = 0;
+const int mt_flag = 1;
 // const int lsdsize = 80;
 const int lsd_r_size = 50;
 const int lsd_t_size = 100;
