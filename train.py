@@ -55,7 +55,8 @@ if __name__ == '__main__':
     for epoch_it in range(0,20):
         logfile.flush()
         
-        for i in range(train_loader.length()):
+        # for i in range(train_loader.length()):
+        for i in range(5):
             tdata, tlabel=train_loader.generate_batch(i)
             print(tdata.shape)
             for j in range(tdata.shape[0]):

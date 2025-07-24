@@ -35,6 +35,7 @@ compile_app() {
         -I "${EIGEN_PATH}" \
         -L "${OPENMESH_LIB}" \
         -lOpenMeshCore \
+        -g \
         -O0 \
         -o ${app_name} \
         -pthread \

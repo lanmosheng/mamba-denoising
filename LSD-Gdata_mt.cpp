@@ -82,7 +82,7 @@ int preprocessing(
 	std::vector<line> &halfedgeset,
 	std::vector<int> &flagz,
 	double &sigma_s,
-	std::vector<std::pair<int, int>> &traindata,
+	std::vector<int> &traindata,
 	int nom)
 {
 
@@ -105,11 +105,7 @@ int preprocessing(
 	sigma_s = getSigmaS(2, face_centroid, noisemesh);
 	markBoundaryFaces(mesh, flagz);
 
-	std::vector<int> sorted_face_order = globalSampling(mesh, flagz, mesh.n_faces());
-	for (int idx : sorted_face_order)
-	{
-		traindata.push_back(std::pair<int, int>(nom, idx));
-	}
+	traindata = globalSampling(mesh, flagz, mesh.n_faces());
 
 	return 0;
 }
@@ -155,7 +151,7 @@ int main(int argc, char *argv[])
 	face_centroid_list.resize(numberofmesh);
 	flagz_list.resize(numberofmesh);
 
-	std::vector<std::pair<int, int>> traindata;
+	std::vector<std::vector<int>> traindata;
 
 	char outputname[200];
 	char outputflagname[200];
@@ -190,21 +186,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	for (int nom = 0; nom < numberofmesh; nom++)
-	{
-		preprocessing(
-			meshlist[nom],
-			noisemeshlist[nom],
-			ringlist_list[nom],
-			noisy_normals_list[nom],
-			filtered_normals_list[nom],
-			face_centroid_list[nom],
-			halfedgeset_list[nom],
-			flagz_list[nom],
-			sigma_s_list[nom],
-			traindata,
-			nom);
-	}
+	traindata.resize(numberofmesh);
 
 	int px[5]; // parameters for gdata
 	// 0,1,2: the index range of output files groups, range(10, 20, 2) = 10, 12, 14, 16, 18
@@ -228,12 +210,26 @@ int main(int argc, char *argv[])
 	}
 	printf("Output case number: %d\n", totalcase);
 
+	for (int nom = px[0]; nom < px[1]; nom += px[2])
+	{
+		preprocessing(
+			meshlist[nom],
+			noisemeshlist[nom],
+			ringlist_list[nom],
+			noisy_normals_list[nom],
+			filtered_normals_list[nom],
+			face_centroid_list[nom],
+			halfedgeset_list[nom],
+			flagz_list[nom],
+			sigma_s_list[nom],
+			traindata[nom],
+			nom);
+	}
+
 	outputcache = new float[px[4] * sampling_size * 3];
 	gtcache = new float[px[4] * 3];
 	memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
 	memset(gtcache, 0, px[4] * 3 * sizeof(float));
-
-	printf("Total face number: %d\n", traindata.size());
 
 	generateLocalSamplingOrder(local_sample);
 
@@ -253,15 +249,17 @@ int main(int argc, char *argv[])
 		outputname[strlen(outputname) - 5] = '0';
 		outputflagname[strlen(outputflagname) - 6] = '0';
 		outputflagname[strlen(outputflagname) - 5] = '0';
+
+		std::vector<int> &nowtraindata = traindata[k0];
 		if (mt_flag == 0)
 		{
 			for (int k1 = 0; k1 < px[3];)
 			{
 				ttx++;
-				if (ttx == traindata.size())
+				if (ttx == nowtraindata.size())
 					ttx = 0;
-				int index = traindata[ttx].second;
-				int meshidx = traindata[ttx].first;
+				int index = nowtraindata[ttx];
+				int meshidx = k0;
 
 				if (gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
 					continue;
@@ -297,10 +295,10 @@ int main(int argc, char *argv[])
 			for (int k1 = 0; k1 < px[3];)
 			{
 				ttx++;
-				if (ttx == traindata.size())
+				if (ttx == nowtraindata.size())
 					ttx = 0;
-				int index = traindata[ttx].second;
-				int meshidx = traindata[ttx].first;
+				int index = nowtraindata[ttx];
+				int meshidx = k0;
 				thread_p[count % thread_number].push_back(pid(index, meshidx, count));
 				count++;
 				k1++;
