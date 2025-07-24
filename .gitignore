@@ -31,3 +31,5 @@ test_sampling
 !stest/.gitkeep
 !strain/.gitkeep
 !thirdparty/.gitkeep
+
+out/logs/*
