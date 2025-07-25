@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 		fscanf(profile, "%s", mesh_n);
 		if (!OpenMesh::IO::read_mesh(meshlist[nom], mesh_n))
 		{
-			printf("data error");
+			printf("read %s data error", mesh_n);
 			return 0;
 		}
 	}
@@ -176,12 +176,12 @@ int main(int argc, char *argv[])
 
 		if (!OpenMesh::IO::read_mesh(noisemeshlist[nom], mesh_n))
 		{
-			printf("data error");
+			printf("read %s data error", mesh_n);
 			return 0;
 		}
 		if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
 		{
-			printf("data error");
+			printf("read %s data error, number of faces differ", mesh_n);
 			return 0;
 		}
 	}

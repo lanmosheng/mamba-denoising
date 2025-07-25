@@ -56,7 +56,7 @@ if __name__ == '__main__':
         logfile.flush()
         
         # for i in range(train_loader.length()):
-        for i in range(5):
+        for i in range(10):
             tdata, tlabel=train_loader.generate_batch(i)
             print(tdata.shape)
             for j in range(tdata.shape[0]):
