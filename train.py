@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import numpy as np
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 from tensorboardX import SummaryWriter
 import argparse
 import time
@@ -22,11 +22,11 @@ if __name__ == '__main__':
     # Set t0
     t0 = time.time()
     model = config.get_model(device, 5001)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-5)
     trainer = Trainer(model, optimizer, device=device)
     # Shorthands
     out_dir = 'out/'
-    logfile = open('out/log.txt','w')
+    logfile = open('out/log.txt','w',buffering=1)
     checkpoint_io = CheckpointIO(out_dir, model=model, optimizer=optimizer)
     try:
         load_dict = checkpoint_io.load('model.pt')
@@ -38,8 +38,14 @@ if __name__ == '__main__':
     it = load_dict.get('it', -1)
     metric_val_best = np.inf
 
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs.")
+        model = torch.nn.DataParallel(model)
+
+    model = model.to(device)
+
     logger = SummaryWriter(os.path.join(out_dir, 'logs'))
-    batch_size=2
+    batch_size = 160
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
@@ -52,11 +58,11 @@ if __name__ == '__main__':
     dev_loader=Loader("dev/",batch_size)
     train_loader=Loader("train/",batch_size)
 
-    for epoch_it in range(0,20):
+
+    for epoch_it in range(15,20):
         logfile.flush()
-        
-        # for i in range(train_loader.length()):
-        for i in range(10):
+        for i in range(train_loader.length()):
+        # for i in range(10):
             tdata, tlabel=train_loader.generate_batch(i)
             print(tdata.shape)
             for j in range(tdata.shape[0]):
