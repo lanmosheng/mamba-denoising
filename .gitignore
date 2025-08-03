@@ -18,7 +18,7 @@ virtualData
 launch.json
 
 **/__pycache__/
-**/logs/
+**/logs/**
 *.py[cod]
 
 LSD-denoising_mt
