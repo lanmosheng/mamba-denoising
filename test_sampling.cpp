@@ -362,6 +362,6 @@ int main()
 		saveSelectedFacesToPLY(noisymesh, localSampleResult, folder + "LocalSampling", i);
 	}
 	savePointsToPly(localSamplePoint, folder + "Point" + ".ply");
-	saveSampleToPLY(local_sample, folder + "Order.ply");
+	// saveSampleToPLY(local_sample, folder + "Order.ply");
 	return 0;
 }

@@ -23,11 +23,11 @@ class Loader():
     def length(self):
         return self.train_num
     def generate_batch(self, idx):
-        train_data = np.fromfile(self.train_filename[idx], dtype='float32').reshape((-1,5001,3))
+        train_data = np.fromfile(self.train_filename[idx], dtype='float32').reshape((-1,1001,3))
         train_label = np.fromfile(self.label_filename[idx], dtype='float32').reshape((-1,3))
         case_number=train_data.shape[0]
         batch_number=case_number//self.batchsize
-        train_data=train_data[0:batch_number*self.batchsize].reshape((batch_number,self.batchsize,5001,3))
+        train_data=train_data[0:batch_number*self.batchsize].reshape((batch_number,self.batchsize,1001,3))
         train_label=train_label[0:batch_number*self.batchsize].reshape((batch_number,self.batchsize,3))
 
         return train_data, train_label

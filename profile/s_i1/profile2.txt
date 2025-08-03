@@ -9,4 +9,4 @@ strain/octa-flower_n3.obj
 strain/fandisk_n2.obj
 dev/01t00t00.npy
 dev/F_01t00t00.npy
-26 35 1 4000 1000
+0 4 1 4000 1000

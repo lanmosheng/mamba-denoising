@@ -6,7 +6,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/LSD-Gdata_mt", // 可执行文件的路径（服务器上的路径）
-        "args": ["profile/s_i1/test_profile1.txt"],   // 程序运行参数
+        "args": ["profile/s_i1/profile1.txt"],   // 程序运行参数
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",                 // 工作目录（通常为程序所在目录）
         "environment": [],

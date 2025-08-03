@@ -232,13 +232,11 @@ int main(int argc, char *argv[])
 	memset(gtcache, 0, px[4] * 3 * sizeof(float));
 
 	generateLocalSamplingOrder(local_sample);
-
-	int ttx = -1;
-
 	printf("Generate LSD\n");
+
 	for (int k0 = px[0]; k0 < px[1]; k0 += px[2])
 	{
-
+		printf("Processing %d\n", k0);
 		int count = 0;
 		int fcount = 0;
 		outputname[strlen(outputname) - 9] = k0 / 10 + '0';
@@ -249,8 +247,8 @@ int main(int argc, char *argv[])
 		outputname[strlen(outputname) - 5] = '0';
 		outputflagname[strlen(outputflagname) - 6] = '0';
 		outputflagname[strlen(outputflagname) - 5] = '0';
-
 		std::vector<int> &nowtraindata = traindata[k0];
+		int ttx = -1;
 		if (mt_flag == 0)
 		{
 			for (int k1 = 0; k1 < px[3];)
@@ -260,7 +258,7 @@ int main(int argc, char *argv[])
 					ttx = 0;
 				int index = nowtraindata[ttx];
 				int meshidx = k0;
-
+				
 				if (gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
 					continue;
 				else

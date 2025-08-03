@@ -36,7 +36,7 @@ double getSigmaS(double multiple, std::vector<TriMesh::Point> &centroid, TriMesh
 			num++;
 		}
 	}
-	return sigma_s * multiple / num / 30;
+	return sigma_s * multiple / num / 15;
 }
 
 void makeRing(TriMesh &mesh, std::vector<ring> &ringlist, int ringnum)

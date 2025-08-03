@@ -30,7 +30,7 @@ class Network(nn.Module):
 
 
 class MambaNet(nn.Module):
-    def __init__(self, num_patches=5001, d_model=64, d_state=16, d_conv=4, expand=2, depth=6):
+    def __init__(self, num_patches=1001, d_model=64, d_state=16, d_conv=4, expand=2, depth=6):
         super().__init__()
         self.num_patches = num_patches
         self.input_proj = nn.Linear(3, d_model)

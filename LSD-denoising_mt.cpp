@@ -3,6 +3,8 @@
 std::vector<SampleDirection> local_sample;
 std::thread td[thread_number];
 float *outputcache;
+float *gtcache;
+
 struct pid
 {
 	int index;
@@ -25,17 +27,19 @@ std::vector<pid> thread_p[thread_number];
 double sigma_s = 0;
 std::vector<ring> ringlist;
 TriMesh noisemesh;
+TriMesh gtmesh;
 std::vector<line> halfedgeset;
 std::vector<TriMesh::Normal> noisy_normals;
 std::vector<TriMesh::Point> face_centroid;
 std::vector<TriMesh::Normal> filtered_normals;
+std::vector<TriMesh::Normal> t_normals;
 std::vector<int> flagz;
 
 std::vector<Eigen::Matrix3d> msave;
 std::vector<int> errorflag;
 std::vector<FILE *> filepo;
 
-int gLSD(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3])
+int gLSD(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3], float groundtruth[3], std::vector<TriMesh::Normal> &t_normals)
 {
 
 	// //obtain n*
@@ -55,6 +59,14 @@ int gLSD(int index, float outputmat[(lsd_r_size * lsd_t_size + 1) * 3])
 																									 a1.data()[2])));
 
 	msave[index] = d2r;
+
+	Eigen::Vector3d gtnormal(t_normals[index].data()[0], t_normals[index].data()[1], t_normals[index].data()[2]);
+	gtnormal = d2 * gtnormal;
+	gtnormal.normalize();
+
+	groundtruth[0] = (float)gtnormal[0];
+	groundtruth[1] = (float)gtnormal[1];
+	groundtruth[2] = (float)gtnormal[2];
 
 	// generate LSD
 
@@ -106,7 +118,7 @@ int preprocessing()
 	face_centroid.resize(noisemesh.n_faces());
 	filtered_normals.resize(noisemesh.n_faces());
 	halfedgeset.resize(noisemesh.n_halfedges());
-
+	t_normals.resize(gtmesh.n_faces());
 	errorflag.resize(noisemesh.n_faces());
 	msave.resize(noisemesh.n_faces());
 
@@ -117,6 +129,7 @@ int preprocessing()
 	}
 	makeRing(noisemesh, ringlist, 3);
 	getFaceNormal(noisemesh, noisy_normals);
+	getFaceNormal(gtmesh, t_normals);
 	getFaceCentroid(noisemesh, face_centroid);
 	sigma_s = getSigmaS(2, face_centroid, noisemesh);
 	markBoundaryFaces(noisemesh, flagz);
@@ -202,7 +215,7 @@ void threadprocess(int p)
 		int index = thread_p[p][i].index;
 		int count = thread_p[p][i].count;
 
-		if (gLSD(index, outputcache + count * sampling_size * 3) == -4)
+		if (gLSD(index, outputcache + count * sampling_size * 3, gtcache + count * 3, t_normals) == -4)
 			errorflag[index] = 1;
 		else
 			errorflag[index] = 0;
@@ -248,21 +261,30 @@ int main(int argc, char *argv[])
 	// read noisy meshes
 	printf("read mesh\n");
 	noisemesh.clean();
+
 	outputcache = new float[filesize * sampling_size * 3];
+	gtcache = new float[filesize * 3];
+
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
 
 		int totalfilenumber = 0;
 		char mesh_n[100];
+		char gt_mesh_n[100];
 		fscanf(profile, "%s", mesh_n);
+		fscanf(profile, "%s", gt_mesh_n);
 		printf("processing: ");
-		printf("%s\n", mesh_n);
+		printf("%s with gtmesh %s\n", mesh_n, gt_mesh_n);
 		if (!OpenMesh::IO::read_mesh(noisemesh, mesh_n))
 		{
 			printf("data error");
 			return 0;
 		}
-
+		if (!OpenMesh::IO::read_mesh(gtmesh, gt_mesh_n))
+		{
+			printf("data error");
+			return 0;
+		}
 		for (int iter = 0; iter < ifn; iter++)
 		{
 			double sigma_s = 0;
@@ -275,12 +297,14 @@ int main(int argc, char *argv[])
 			errorflag.clear();
 			flagz.clear();
 			filepo.clear();
+			t_normals.clear();
 			preprocessing();
 			goutputfile(noisemesh.n_faces(), filesize);
 			int count = 0;
 			int fcount = 0;
 
 			memset(outputcache, 0, filesize * sampling_size * 3 * sizeof(float));
+			memset(gtcache, 0, filesize * 3 * sizeof(float));
 			for (int k1 = 0; k1 < thread_number; k1++)
 				thread_p[k1].clear();
 
@@ -309,6 +333,7 @@ int main(int argc, char *argv[])
 					count = 0;
 					fcount++;
 					memset(outputcache, 0, filesize * sampling_size * 3 * sizeof(float));
+					memset(gtcache, 0, filesize * 3 * sizeof(float));
 					for (int k1 = 0; k1 < thread_number; k1++)
 						thread_p[k1].clear();
 				}
@@ -328,6 +353,7 @@ int main(int argc, char *argv[])
 			fread(nomralcache, sizeof(float), noisemesh.n_faces() * 3, nf);
 			fclose(nf);
 
+			double loss_mean = 0;
 			for (int iterf = 0; iterf < noisemesh.n_faces(); iterf++)
 			{
 				int nowface_id = sorted_face_order[iterf];
@@ -343,8 +369,18 @@ int main(int argc, char *argv[])
 				else
 				{
 					filtered_normals[nowface_id] = noisy_normals[nowface_id];
+					printf("ErrorFlag Exists!\n");
 				}
+				TriMesh::Normal pred = filtered_normals[nowface_id];
+				TriMesh::Normal gt = t_normals[nowface_id];
+				pred.normalize();
+				gt.normalize();
+				loss_mean += (pred[0] - gt[0]) * (pred[0] - gt[0]) + (pred[1] - gt[1]) * (pred[1] - gt[1]) + (pred[2] - gt[2]) * (pred[2] - gt[2]);
 			}
+			loss_mean /= noisemesh.n_faces();
+			loss_mean /= 3.0;
+			std::cout << "[ACC] Mean Squre Error: " << loss_mean << ". Model " << iter << std::endl;
+
 			delete nomralcache;
 
 			updateVertexPosition(noisemesh, filtered_normals, ivn, false);
@@ -354,5 +390,6 @@ int main(int argc, char *argv[])
 		noisemesh.clean();
 	}
 	delete outputcache;
+	delete gtcache;
 	return 0;
 }

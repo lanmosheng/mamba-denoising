@@ -21,7 +21,7 @@ if __name__ == '__main__':
     np.random.seed(0)
     # Set t0
     t0 = time.time()
-    model = config.get_model(device, 5001)
+    model = config.get_model(device, 1001)
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
     trainer = Trainer(model, optimizer, device=device)
     # Shorthands
