@@ -49,6 +49,8 @@ class Trainer():
         loss.backward()
         self.optimizer.step()
         return loss.item()
+    
+    
     def evaluate(self, val_loader):
         ''' Performs an evaluation.
         Args:
@@ -80,21 +82,44 @@ class Trainer():
             loss = self.model.compute_loss(data, label)
         return  loss
 
-    def compute_loss(self, data, label):
-        ''' Computes the loss.
+    # def compute_loss(self, data, label):
+    #     ''' Computes the loss.
 
-        Args:
-            data (dict): data dictionary
-        '''
+    #     Args:
+    #         data (dict): data dictionary
+    #     '''
+    #     device = self.device
+    #     data =torch.tensor(data).to(self.device).float()
+    #     label = torch.tensor(label).to(self.device).float()   
+    #     output = self.model.pred(data)
+    #     loss_fn = torch.nn.MSELoss()
+    #     loss = loss_fn(output, label)
+
+    #     return loss.float()
+
+    def compute_loss(self, data, label):
         device = self.device
-        data =torch.tensor(data).to(self.device).float()
-        label = torch.tensor(label).to(self.device).float()   
+        data = torch.tensor(data).to(device).float()
+        label = torch.tensor(label).to(device).float()
+
         output = self.model.pred(data)
+
+        # ✅ 检查 output 和 label 是否有异常
+        if torch.isnan(output).any() or torch.isinf(output).any():
+            print("❌ [Loss Debug] Model output contains NaN or Inf")
+            torch.save(output, "debug_output.pt")
+            torch.save(data, "debug_input.pt")
+            torch.save(label, "debug_label.pt")
+            raise ValueError("Model output contains NaN or Inf")
+
         loss_fn = torch.nn.MSELoss()
         loss = loss_fn(output, label)
 
-        return loss.float()
+        if torch.isnan(loss).any() or torch.isinf(loss).any():
+            print("❌ [Loss Debug] Loss value is NaN or Inf")
+            raise ValueError("Loss value is NaN or Inf")
 
+        return loss.float()
 
 
     

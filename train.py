@@ -11,6 +11,20 @@ from trainer import Trainer
 from checkpoints import CheckpointIO
 from fileloader import Loader
 import pickle
+import random
+#---------------------------------------------------#
+#   设置种子
+#---------------------------------------------------#
+def seed_everything(seed=11):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 
 if __name__ == '__main__':  
 # Arguments
@@ -18,11 +32,11 @@ if __name__ == '__main__':
     is_cuda = (torch.cuda.is_available() )
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
-    np.random.seed(0)
+    seed_everything(0)
     # Set t0
     t0 = time.time()
     model = config.get_model(device, 1001)
-    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=5e-5)
     trainer = Trainer(model, optimizer, device=device)
     # Shorthands
     out_dir = 'out/'
@@ -59,10 +73,12 @@ if __name__ == '__main__':
     train_loader=Loader("train/",batch_size)
 
 
-    for epoch_it in range(15,20):
+    for epoch_it in range(0,20):
         logfile.flush()
         for i in range(train_loader.length()):
         # for i in range(10):
+            if (i == 148) or (i == 112):
+                continue
             tdata, tlabel=train_loader.generate_batch(i)
             print(tdata.shape)
             for j in range(tdata.shape[0]):

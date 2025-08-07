@@ -1,0 +1,301 @@
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+read mesh
+processing: strain/bumpy_sphere_n1.obj with gtmesh strain/bumpy_sphere.obj
+[ACC] Mean Squre Error: 0.00204147. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bumpy_sphere_n2.obj with gtmesh strain/bumpy_sphere.obj
+[ACC] Mean Squre Error: 0.00303485. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bumpy_sphere_n3.obj with gtmesh strain/bumpy_sphere.obj
+[ACC] Mean Squre Error: 0.00672263. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bunny_n1.obj with gtmesh strain/bunny.obj
+[ACC] Mean Squre Error: 0.0015107. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bunny_n2.obj with gtmesh strain/bunny.obj
+[ACC] Mean Squre Error: 0.00242819. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bunny_n3.obj with gtmesh strain/bunny.obj
+[ACC] Mean Squre Error: 0.00571562. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bust_n1.obj with gtmesh strain/bust.obj
+[ACC] Mean Squre Error: 0.00819012. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bust_n2.obj with gtmesh strain/bust.obj
+[ACC] Mean Squre Error: 0.00985696. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/bust_n3.obj with gtmesh strain/bust.obj
+[ACC] Mean Squre Error: 0.0141634. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/cad_n1.obj with gtmesh strain/cad.obj
+[ACC] Mean Squre Error: 0.00733434. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/cad_n2.obj with gtmesh strain/cad.obj
+[ACC] Mean Squre Error: 0.0090716. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/cad_n3.obj with gtmesh strain/cad.obj
+[ACC] Mean Squre Error: 0.0144511. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/casting_n1.obj with gtmesh strain/casting.obj
+[ACC] Mean Squre Error: 0.00938262. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/casting_n2.obj with gtmesh strain/casting.obj
+[ACC] Mean Squre Error: 0.0120622. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/casting_n3.obj with gtmesh strain/casting.obj
+[ACC] Mean Squre Error: 0.0181267. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/ccylinder_n1.obj with gtmesh strain/ccylinder.obj
+[ACC] Mean Squre Error: 0.00748522. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/ccylinder_n2.obj with gtmesh strain/ccylinder.obj
+[ACC] Mean Squre Error: 0.009699. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/ccylinder_n3.obj with gtmesh strain/ccylinder.obj
+[ACC] Mean Squre Error: 0.0150867. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/coverrear_Lp_n1.obj with gtmesh strain/coverrear_Lp.obj
+[ACC] Mean Squre Error: 0.00614516. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/coverrear_Lp_n2.obj with gtmesh strain/coverrear_Lp.obj
+[ACC] Mean Squre Error: 0.00764138. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/coverrear_Lp_n3.obj with gtmesh strain/coverrear_Lp.obj
+[ACC] Mean Squre Error: 0.0124368. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Cylinder_n1.obj with gtmesh strain/Cylinder.obj
+[ACC] Mean Squre Error: 0.00695459. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Cylinder_n2.obj with gtmesh strain/Cylinder.obj
+[ACC] Mean Squre Error: 0.00802232. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Cylinder_n3.obj with gtmesh strain/Cylinder.obj
+[ACC] Mean Squre Error: 0.0140655. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/elephant_n1.obj with gtmesh strain/elephant.obj
+[ACC] Mean Squre Error: 0.00264889. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/elephant_n2.obj with gtmesh strain/elephant.obj
+[ACC] Mean Squre Error: 0.00417646. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/elephant_n3.obj with gtmesh strain/elephant.obj
+[ACC] Mean Squre Error: 0.00798847. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/fandisk_n1.obj with gtmesh strain/fandisk.obj
+[ACC] Mean Squre Error: 0.00730361. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/fandisk_n2.obj with gtmesh strain/fandisk.obj
+[ACC] Mean Squre Error: 0.00966166. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/fandisk_n3.obj with gtmesh strain/fandisk.obj
+[ACC] Mean Squre Error: 0.0158058. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/frog_n1.obj with gtmesh strain/frog.obj
+[ACC] Mean Squre Error: 0.00364315. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/frog_n2.obj with gtmesh strain/frog.obj
+[ACC] Mean Squre Error: 0.00518306. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/frog_n3.obj with gtmesh strain/frog.obj
+[ACC] Mean Squre Error: 0.00933296. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/genus3_n1.obj with gtmesh strain/genus3.obj
+[ACC] Mean Squre Error: 0.0019462. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/genus3_n2.obj with gtmesh strain/genus3.obj
+[ACC] Mean Squre Error: 0.00335918. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/genus3_n3.obj with gtmesh strain/genus3.obj
+[ACC] Mean Squre Error: 0.00744479. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Icosahedron_n1.obj with gtmesh strain/Icosahedron.obj
+[ACC] Mean Squre Error: 0.00324592. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Icosahedron_n2.obj with gtmesh strain/Icosahedron.obj
+[ACC] Mean Squre Error: 0.00405538. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Icosahedron_n3.obj with gtmesh strain/Icosahedron.obj
+[ACC] Mean Squre Error: 0.00769994. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Julius_n1.obj with gtmesh strain/Julius.obj
+[ACC] Mean Squre Error: 0.00644061. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Julius_n2.obj with gtmesh strain/Julius.obj
+[ACC] Mean Squre Error: 0.007877. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Julius_n3.obj with gtmesh strain/Julius.obj
+[ACC] Mean Squre Error: 0.0122608. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/leg_n1.obj with gtmesh strain/leg.obj
+[ACC] Mean Squre Error: 0.00132983. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/leg_n2.obj with gtmesh strain/leg.obj
+[ACC] Mean Squre Error: 0.00214726. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/leg_n3.obj with gtmesh strain/leg.obj
+[ACC] Mean Squre Error: 0.00538757. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/octa-flower_n1.obj with gtmesh strain/octa-flower.obj
+[ACC] Mean Squre Error: nan. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/octa-flower_n2.obj with gtmesh strain/octa-flower.obj
+[ACC] Mean Squre Error: nan. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/octa-flower_n3.obj with gtmesh strain/octa-flower.obj
+[ACC] Mean Squre Error: 0.0247112. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Octahedron_n1.obj with gtmesh strain/Octahedron.obj
+[ACC] Mean Squre Error: 0.00538956. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Octahedron_n2.obj with gtmesh strain/Octahedron.obj
+[ACC] Mean Squre Error: 0.00657275. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/Octahedron_n3.obj with gtmesh strain/Octahedron.obj
+[ACC] Mean Squre Error: 0.0109429. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/rockerarm_n1.obj with gtmesh strain/rockerarm.obj
+[ACC] Mean Squre Error: 0.00561604. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/rockerarm_n2.obj with gtmesh strain/rockerarm.obj
+[ACC] Mean Squre Error: 0.00742518. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/rockerarm_n3.obj with gtmesh strain/rockerarm.obj
+[ACC] Mean Squre Error: 0.0117566. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/sculpt_n1.obj with gtmesh strain/sculpt.obj
+[ACC] Mean Squre Error: 0.0104157. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/sculpt_n2.obj with gtmesh strain/sculpt.obj
+[ACC] Mean Squre Error: 0.0118972. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/sculpt_n3.obj with gtmesh strain/sculpt.obj
+[ACC] Mean Squre Error: 0.0179161. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/vase100K_n1.obj with gtmesh strain/vase100K.obj
+[ACC] Mean Squre Error: 0.00655636. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/vase100K_n2.obj with gtmesh strain/vase100K.obj
+[ACC] Mean Squre Error: 0.00806653. Model 0
+Using sampling size =  1001
+model/s_i1/model_best.pt
+=> Loading checkpoint from local file...
+processing: strain/vase100K_n3.obj with gtmesh strain/vase100K.obj
+[ACC] Mean Squre Error: 0.0121337. Model 0
