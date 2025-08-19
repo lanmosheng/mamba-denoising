@@ -7,6 +7,6 @@ strain/cad_n1_01.off
 strain/elephant_n2_01.off
 strain/octa-flower_n3_01.off
 strain/fandisk_n2_01.off
-dev/01t00t00.npy
-dev/F_01t00t00.npy
-26 35 1 4000 1000
+dev1601_2/01t00t00.npy
+dev1601_2/F_01t00t00.npy
+0 4 1 4000 1000

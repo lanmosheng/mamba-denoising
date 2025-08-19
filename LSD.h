@@ -15,9 +15,10 @@ const int thread_number = 8;
 extern std::thread td[thread_number];
 const int mt_flag = 1;
 // const int lsdsize = 80;
-const int lsd_r_size = 25;
+const int lsd_r_size = 40;
 const int lsd_t_size = 40;
 const int sampling_size = lsd_r_size * lsd_t_size + 1;
+const int ringnum = 4;
 extern float *outputcache;
 // extern int supmat[lsdsize][lsdsize][3];
 

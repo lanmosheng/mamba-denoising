@@ -42,10 +42,10 @@ int preprocessing(TriMesh &noisemesh)
 
 TriMesh noisymesh;
 // std::string noisymesh_path = "./strain/bumpy_sphere_n1.obj";
-std::string noisymesh_path = "./block.obj";
+std::string noisymesh_path = "./stest/block.obj";
 
 TriMesh mesh;
-std::string mesh_path = "./strain/bumpy_sphere.obj";
+std::string mesh_path = "./stest/block.obj";
 
 std::string num[10] = {"10", "20", "30", "40", "50", "60", "70", "80", "90", "100"};
 
@@ -351,7 +351,6 @@ int main()
 	{
 		saveSelectedFacesToPLY(noisymesh, traindata, folder + "GlobalSampling", i);
 	}
-
 	std::cout << traindata.size() << std::endl;
 	std::vector<int> localSampleResult;
 	std::vector<MyTraits::Point> localSamplePoint;

@@ -36,7 +36,7 @@ double getSigmaS(double multiple, std::vector<TriMesh::Point> &centroid, TriMesh
 			num++;
 		}
 	}
-	return sigma_s * multiple / num / 15;
+	return sigma_s * multiple / num / (lsd_r_size / ringnum);
 }
 
 void makeRing(TriMesh &mesh, std::vector<ring> &ringlist, int ringnum)
@@ -236,16 +236,17 @@ int samplingNormal(
 		nownormal = TriMesh::Normal(temp3[0], temp3[1], temp3[2]);
 		nownormal.normalize();
 
-		if (i == 0)
+		if (s.radius <= 1e-6)
 		{
 			Eigen::Vector3d temp5(
 				noisy_normals[centreface].data()[0],
 				noisy_normals[centreface].data()[1],
 				noisy_normals[centreface].data()[2]);
 			temp5 = d2 * temp5;
-			outputmat[0] = (float)temp5[0];
-			outputmat[1] = (float)temp5[1];
-			outputmat[2] = (float)temp5[2];
+			temp5.normalize();
+			outputmat[i * 3] = (float)temp5[0];
+			outputmat[i * 3 + 1] = (float)temp5[1];
+			outputmat[i * 3 + 2] = (float)temp5[2];
 			continue;
 		}
 		std::unordered_set<int> visitedface;

@@ -1,9 +1,7 @@
-./LSD-Gdata_mt profile/s_i1/test_profile1.txt
-./LSD-Gdata_mt profile/s_i1/test_profile2.txt
+# python eval.py --profile profile/eval/s_i1_base.txt --mode face --weighted --csv resnet_results.csv
+# python eval.py --profile profile/eval/s_i1_new.txt --mode face --weighted --csv mamba_results.csv
+# python compare.py --new mamba_results.csv --base resnet_results.csv --labels "Mamba,ResNet"
 
-./LSD-denoising_mt profile/s_i1/test_s_i1.txt
-
-# ./LSD-Gdata_mt profile/s_i2/test_profile1.txt
-# ./LSD-Gdata_mt profile/s_i2/test_profile2.txt
-
-# ./LSD-denoising_mt profile/s_i2/test_s_i2.txt
+python eval.py --profile profile/eval/s_i2_base.txt --mode face --weighted --csv resnet_results2.csv
+python eval.py --profile profile/eval/s_i2_new.txt --mode face --weighted --csv mamba_results2.csv
+python compare.py --new mamba_results2.csv --base resnet_results2.csv --labels "Mamba,ResNet"

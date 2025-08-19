@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
 					ttx = 0;
 				int index = nowtraindata[ttx];
 				int meshidx = k0;
-				
+
 				if (gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
 					continue;
 				else
