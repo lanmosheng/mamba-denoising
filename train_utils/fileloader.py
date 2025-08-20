@@ -24,8 +24,13 @@ class Loader():
         # 加载 meta 数据
         self.meta = load_meta(meta_path)
         
+        # 从 meta 数据中提取 lsd_r_size, lsd_t_size, patch_num
+        self.lsd_r_size = self.meta["lsd_r_size"]
+        self.lsd_t_size = self.meta["lsd_t_size"]
+        self.patch_num = self.meta["patch_num"]
+
         # 计算 sampling_size
-        self.sampling_size = self.meta["lsd_r_size"] * self.meta["lsd_t_size"] + 1
+        self.sampling_size = self.lsd_r_size * self.lsd_t_size + 1
         print(f"Calculated sampling_size: {self.sampling_size}")
 
         # 存储每个 mesh 文件夹的 lsd.npy 和 gt.npy
@@ -64,3 +69,11 @@ class Loader():
         train_label = train_label[:batch_number * self.batchsize].reshape((batch_number, self.batchsize, 3))
         
         return train_data, train_label
+
+    def get_meta_data(self):
+        """返回 meta 数据"""
+        return {
+            'lsd_r_size': self.lsd_r_size,
+            'lsd_t_size': self.lsd_t_size,
+            'patch_num': self.patch_num
+        }
