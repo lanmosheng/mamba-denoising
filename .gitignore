@@ -24,3 +24,5 @@ LSD-Gdata_mt
 !stest/.gitkeep
 !strain/.gitkeep
 !thirdparty/.gitkeep
+
+*.pub
