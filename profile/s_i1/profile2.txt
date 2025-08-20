@@ -7,6 +7,6 @@ strain/cad_n1.obj
 strain/elephant_n2.obj
 strain/octa-flower_n3.obj
 strain/fandisk_n2.obj
-dev2401/01t00t00.npy
-dev2401/F_01t00t00.npy
+dev1601/
+patches/
 0 4 1 4000 1000

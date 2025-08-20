@@ -6,10 +6,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 from tensorboardX import SummaryWriter
 import argparse
 import time
-import config
-from trainer import Trainer
-from checkpoints import CheckpointIO
-from fileloader import Loader
+from train_utils import config
+from train_utils.trainer import Trainer
+from train_utils.checkpoints import CheckpointIO
+from train_utils.fileloader import Loader
 import pickle
 import sys
 if __name__ == '__main__':  

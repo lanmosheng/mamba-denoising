@@ -111,6 +111,6 @@ strain/sculpt_n3.obj
 strain/vase100K_n1.obj
 strain/vase100K_n2.obj
 strain/vase100K_n3.obj
-dataset2401/
+train1601/
 patches/
 15 35 1
