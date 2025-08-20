@@ -61,13 +61,13 @@ class MambaNet(nn.Module):
                  num_patches: int = 1601,          # = 1 + lsd_r_size * lsd_t_size
                  lsd_r_size: int | None = None,
                  lsd_t_size: int | None = None,
-                 d_model: int = 96,
+                 d_model: int = 64,
                  d_state: int = 16,
                  d_conv: int = 4,
                  expand: int = 2,
                  depth: int = 8,
                  residual_scale: float = 0.5,
-                 p_drop: float = 0.0,
+                 p_drop: float = 0.05,
                  add_pos_emb: bool = True):
         super().__init__()
         self.num_patches = num_patches

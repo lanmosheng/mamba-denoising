@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # ---- 目录先创建，再打开日志，再建 writer ----
     # out_dir = f'out{sampling_size}/'
     # out_dir = f'out_s2/'
-    out_dir = 'out_1601_new'
+    out_dir = 'out_1601_drop'
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)

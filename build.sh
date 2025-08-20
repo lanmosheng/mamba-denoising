@@ -35,8 +35,8 @@ compile_app() {
         -I "${EIGEN_PATH}" \
         -L "${OPENMESH_LIB}" \
         -lOpenMeshCore \
-        -g \
-        -O0 \
+        -O3 \
+        -L /usr/local/lib -Wl,-rpath=/usr/local/lib -lcnpy -lz \
         -o ${app_name} \
         -pthread \
         -Wl,-rpath,'$ORIGIN/thirdparty/OpenMesh-8.1/build/Build/lib'  # 设置rpath
@@ -51,7 +51,7 @@ compile_app() {
 }
 
 # 编译应用程序
-compile_app "LSD-denoising_mt" "LSD-denoising_mt.cpp"
+# compile_app "LSD-denoising_mt" "LSD-denoising_mt.cpp"
 compile_app "LSD-Gdata_mt" "LSD-Gdata_mt.cpp"
 
 # 添加其他需要编译的程序...

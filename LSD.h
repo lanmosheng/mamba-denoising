@@ -13,12 +13,14 @@
 
 const int thread_number = 8;
 extern std::thread td[thread_number];
-const int mt_flag = 1;
+// const int mt_flag = 0;
+const int skip_patch = 1;
 // const int lsdsize = 80;
-const int lsd_r_size = 40;
+const int lsd_r_size = 60;
 const int lsd_t_size = 40;
 const int sampling_size = lsd_r_size * lsd_t_size + 1;
 const int ringnum = 4;
+const int patch_num = 240;
 extern float *outputcache;
 // extern int supmat[lsdsize][lsdsize][3];
 
@@ -102,7 +104,6 @@ TriMesh::Normal getPolarAxis(TriMesh &mesh, int face_index, const std::vector<Tr
 int samplingNormal(
 	TriMesh &mesh,
 	int index,
-	const Eigen::Matrix3d &d2,
 	const TriMesh::Normal &startnormal,
 	const std::vector<TriMesh::Point> &face_centroid,
 	const std::vector<TriMesh::Normal> &noisy_normals,
@@ -111,7 +112,7 @@ int samplingNormal(
 	std::vector<SampleDirection> &local_sample,
 	float *outputmat);
 
-std::vector<int> globalSampling(TriMesh &mesh, const std::vector<int> &flagz, const int n_faces);
+std::vector<int> getPatch(TriMesh &mesh, int index, const int n_faces);
 
 void markBoundaryFaces(TriMesh &mesh, std::vector<int> &flagz);
 

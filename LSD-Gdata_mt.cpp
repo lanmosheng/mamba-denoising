@@ -1,12 +1,18 @@
 #include "LSD.h"
-
-std::vector<SampleDirection> local_sample;
-std::thread td[thread_number];
-float *outputcache = nullptr;
-
+#include <fstream>
+#include <cnpy.h>
+#include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
+#endif
 // std::vector<float> outputcache;
-
+float *outputcache;
 float *gtcache;
+std::vector<SampleDirection> local_sample;
 struct pid
 {
 	int index;
@@ -47,20 +53,11 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size * 3], float gr
 		 std::vector<TriMesh::Point> &face_centroid,
 		 std::vector<int> &flagz)
 {
-	// //obtain n*
-	TriMesh::Normal a1 = getAveNormal(ringlist[index], noisy_normals, flagz[index], flagz);
 
 	// obtain polar axis
 	TriMesh::Normal startnormal = getPolarAxis(mesh2, index, face_centroid);
 
-	// obtain rotation matrix and rotated ground truth
-	Eigen::Matrix3d d2(Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d(a1.data()[0],
-																		  a1.data()[1],
-																		  a1.data()[2]),
-														  Eigen::Vector3d(1, 0, 0)));
-
 	Eigen::Vector3d gtnormal(filtered_normals[index].data()[0], filtered_normals[index].data()[1], filtered_normals[index].data()[2]);
-	gtnormal = d2 * gtnormal;
 	gtnormal.normalize();
 
 	groundtruth[0] = (float)gtnormal[0];
@@ -68,7 +65,7 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size * 3], float gr
 	groundtruth[2] = (float)gtnormal[2];
 
 	// generate LSD
-	int err = samplingNormal(mesh2, index, d2, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, local_sample, outputmat);
+	int err = samplingNormal(mesh2, index, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, local_sample, outputmat);
 	return err;
 }
 
@@ -82,7 +79,6 @@ int preprocessing(
 	std::vector<line> &halfedgeset,
 	std::vector<int> &flagz,
 	double &sigma_s,
-	std::vector<int> &traindata,
 	int nom)
 {
 
@@ -105,8 +101,6 @@ int preprocessing(
 	sigma_s = getSigmaS(2, face_centroid, noisemesh);
 	markBoundaryFaces(mesh, flagz);
 
-	traindata = globalSampling(mesh, flagz, mesh.n_faces());
-
 	return 0;
 }
 
@@ -120,6 +114,57 @@ void threadprocess(int p)
 
 		gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]);
 	}
+}
+int mkfolder(std::string outputname)
+{
+	std::string dir = outputname; // 形如 "dataset/文件夹名/"
+	while (!dir.empty() && (dir.back() == '/' || dir.back() == '\\'))
+		dir.pop_back();
+
+	int rc;
+#ifdef _WIN32
+	rc = _mkdir(dir.c_str());
+#else
+	rc = mkdir(dir.c_str(), 0755);
+#endif
+	if (rc != 0 && errno != EEXIST)
+	{
+		perror(("mkdir failed: " + dir).c_str());
+		return 0;
+	}
+	return 1;
+}
+
+void generateFile(const std::string &outdir, float *lsdcache, float *gtcache, bool first)
+{
+	std::string lsd_path = outdir + "/lsd.npy";
+	std::string gt_path = outdir + "/gt.npy";
+	const char *mode = first ? "w" : "a";
+	cnpy::npy_save(lsd_path, lsdcache, std::vector<size_t>{1, sampling_size, 3}, mode); // (1,N,3)
+	cnpy::npy_save(gt_path, gtcache, std::vector<size_t>{1, 3}, mode);					// (1,3)
+}
+void generatePatchFile(const std::string &outdir, const std::vector<int> &patches, bool first)
+{
+	std::string patch_path = outdir + "/patch_faces.npy";
+	const char *mode = first ? "w" : "a";
+	std::vector<int32_t> row(patches.begin(), patches.end());
+	cnpy::npy_save(patch_path, row.data(), std::vector<size_t>{1, (size_t)row.size()}, mode);
+}
+bool write_meta(const std::string &dir)
+{
+	std::string path = dir + "meta.json";
+	std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
+	if (!ofs)
+		return false;
+
+	ofs << "{\n"
+		<< "  \"lsd_r_size\": " << lsd_r_size << ",\n"
+		<< "  \"lsd_t_size\": " << lsd_t_size << ",\n"
+		<< "  \"ringnum\": " << ringnum << ",\n"
+		<< "  \"patch_num\": " << patch_num << "\n"
+		<< "}\n";
+	ofs.close();
+	return ofs.good();
 }
 int main(int argc, char *argv[])
 {
@@ -138,9 +183,7 @@ int main(int argc, char *argv[])
 		printf("profile error\n");
 		return 0;
 	}
-
 	fscanf(profile, "%d", &numberofmesh);
-
 	meshlist.resize(numberofmesh);
 	noisemeshlist.resize(numberofmesh);
 	sigma_s_list.resize(numberofmesh);
@@ -151,64 +194,54 @@ int main(int argc, char *argv[])
 	face_centroid_list.resize(numberofmesh);
 	flagz_list.resize(numberofmesh);
 
-	std::vector<std::vector<int>> traindata;
-
-	char outputname[200];
-	char outputflagname[200];
-	char mesh_n[200];
+	std::string outputfile;
+	std::string patchfile;
+	std::string mesh_n[numberofmesh * 2 + 1];
 
 	// read ground truth meshes
 	printf("read mesh\n");
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
-
-		fscanf(profile, "%s", mesh_n);
-		if (!OpenMesh::IO::read_mesh(meshlist[nom], mesh_n))
+		char buff[30];
+		fscanf(profile, "%s", buff);
+		mesh_n[nom] = buff;
+		if (!OpenMesh::IO::read_mesh(meshlist[nom], mesh_n[nom]))
 		{
-			printf("read %s data error", mesh_n);
+			printf("read %s mesh error", mesh_n[nom].c_str());
 			return 0;
 		}
 	}
 	// read noisy meshes
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
-		fscanf(profile, "%s", mesh_n);
-
-		if (!OpenMesh::IO::read_mesh(noisemeshlist[nom], mesh_n))
+		char buff[30];
+		fscanf(profile, "%s", buff);
+		mesh_n[nom + numberofmesh] = buff;
+		if (!OpenMesh::IO::read_mesh(noisemeshlist[nom], mesh_n[nom + numberofmesh]))
 		{
-			printf("read %s data error", mesh_n);
+			printf("read %s data error", mesh_n[nom + numberofmesh].c_str());
 			return 0;
 		}
 		if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
 		{
-			printf("read %s data error, number of faces differ", mesh_n);
+			printf("read %s data error, number of faces differ", mesh_n[nom].c_str());
 			return 0;
 		}
 	}
-
-	traindata.resize(numberofmesh);
-
-	int px[5]; // parameters for gdata
+	printf("read mesh over\n");
+	int px[3]; // parameters for gdata
 	// 0,1,2: the index range of output files groups, range(10, 20, 2) = 10, 12, 14, 16, 18
-	// 3: the number of LSD in each group
-	// 4: the number of LSD in each file
-	fscanf(profile, "%s", outputname);	   // name and path of training files
-	fscanf(profile, "%s", outputflagname); // name and path of ground truth files
 
-	for (int i = 0; i < 5; i++)
+	char outputfilebuff[30];
+	fscanf(profile, "%s", outputfilebuff); // name and path of dataset
+	outputfile = outputfilebuff;
+
+	char patchfilebuff[30];
+	fscanf(profile, "%s", patchfilebuff);
+	patchfile = patchfilebuff;
+
+	for (int i = 0; i < 3; i++)
 		fscanf(profile, "%d", &px[i]);
-	if (px[3] % px[4] != 0)
-	{
-
-		printf("px3 must be divisible by px4\n");
-		return 0;
-	}
-	int totalcase = 0;
-	for (int k0 = px[0]; k0 < px[1]; k0 += px[2])
-	{
-		totalcase += px[3];
-	}
-	printf("Output case number: %d\n", totalcase);
 
 	for (int nom = px[0]; nom < px[1]; nom += px[2])
 	{
@@ -222,119 +255,57 @@ int main(int argc, char *argv[])
 			halfedgeset_list[nom],
 			flagz_list[nom],
 			sigma_s_list[nom],
-			traindata[nom],
 			nom);
 	}
 
-	outputcache = new float[px[4] * sampling_size * 3];
-	gtcache = new float[px[4] * 3];
-	memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
-	memset(gtcache, 0, px[4] * 3 * sizeof(float));
+	outputcache = new float[sampling_size * 3];
+	gtcache = new float[3];
+	memset(outputcache, 0, sampling_size * 3 * sizeof(float));
+	memset(gtcache, 0, 3 * sizeof(float));
+
+	printf("Write Meta\n");
+	write_meta(outputfile);
 
 	generateLocalSamplingOrder(local_sample);
 	printf("Generate LSD\n");
-
 	for (int k0 = px[0]; k0 < px[1]; k0 += px[2])
 	{
-		printf("Processing %d\n", k0);
-		int count = 0;
-		int fcount = 0;
-		outputname[strlen(outputname) - 9] = k0 / 10 + '0';
-		outputname[strlen(outputname) - 8] = k0 % 10 + '0';
-		outputflagname[strlen(outputflagname) - 9] = k0 / 10 + '0';
-		outputflagname[strlen(outputflagname) - 8] = k0 % 10 + '0';
-		outputname[strlen(outputname) - 6] = '0';
-		outputname[strlen(outputname) - 5] = '0';
-		outputflagname[strlen(outputflagname) - 6] = '0';
-		outputflagname[strlen(outputflagname) - 5] = '0';
-		std::vector<int> &nowtraindata = traindata[k0];
-		int ttx = -1;
-		if (mt_flag == 0)
+		printf("Processing %s\n", mesh_n[k0 + numberofmesh].c_str());
+
+		std::string name = mesh_n[k0 + numberofmesh];
+		if (name.rfind("strain/", 0) == 0)
+			name.erase(0, 7);
+		auto pos = name.find_last_of('.'); // 找最后一个点
+		if (pos != std::string::npos)
+			name.erase(pos);
+
+		std::string outputname = outputfile + name;
+		mkfolder(outputname);
+
+		int nfaces = meshlist[k0].n_faces();
+		for (int index = 0; index < nfaces; index++)
 		{
-			for (int k1 = 0; k1 < px[3];)
+			// printf("%d/%d\r", index, nfaces);
+			if (gLSD(index, noisemeshlist[k0], outputcache, gtcache, sigma_s_list[k0], ringlist_list[k0], filtered_normals_list[k0], halfedgeset_list[k0], noisy_normals_list[k0], face_centroid_list[k0], flagz_list[k0]) == -4)
 			{
-				ttx++;
-				if (ttx == nowtraindata.size())
-					ttx = 0;
-				int index = nowtraindata[ttx];
-				int meshidx = k0;
-
-				if (gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]) == -4)
-					continue;
-				else
-					k1++;
-
-				count++;
-				if (count == px[4])
-				{
-					outputname[strlen(outputname) - 6] = fcount / 10 + '0';
-					outputname[strlen(outputname) - 5] = fcount % 10 + '0';
-					outputflagname[strlen(outputflagname) - 6] = fcount / 10 + '0';
-					outputflagname[strlen(outputflagname) - 5] = fcount % 10 + '0';
-					FILE *outfile1 = fopen(outputname, "wb");
-					FILE *outfile2 = fopen(outputflagname, "wb");
-
-					fwrite(outputcache, sizeof(float), px[4] * sampling_size * 3, outfile1);
-					fwrite(gtcache, sizeof(float), px[4] * 3, outfile2);
-					fclose(outfile1);
-					fclose(outfile2);
-					count = 0;
-					fcount++;
-
-					memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
-					memset(gtcache, 0, px[4] * 3 * sizeof(float));
-				}
+				printf("LSD Error %s faceindex %d\n", mesh_n[k0].c_str(), index);
+				exit(1);
 			}
+			generateFile(outputname, outputcache, gtcache, index == 0);
+			memset(outputcache, 0, sampling_size * 3 * sizeof(float));
+			memset(gtcache, 0, 3 * sizeof(float));
 		}
-		else
+		printf("\n");
+		if (!skip_patch)
 		{
-			for (int k1 = 0; k1 < thread_number; k1++)
-				thread_p[k1].clear();
-			for (int k1 = 0; k1 < px[3];)
+			printf("Generate Patch\n");
+			std::string patchname = patchfile + name;
+			mkfolder(patchname);
+			for (int index = 0; index < nfaces; index++)
 			{
-				ttx++;
-				if (ttx == nowtraindata.size())
-					ttx = 0;
-				int index = nowtraindata[ttx];
-				int meshidx = k0;
-				thread_p[count % thread_number].push_back(pid(index, meshidx, count));
-				count++;
-				k1++;
-				if (count == px[4])
-				{
-					for (int k2 = 0; k2 < thread_number; k2++)
-					{
-						td[k2] = std::thread(threadprocess, k2);
-					}
-					for (int k2 = 0; k2 < thread_number; k2++)
-					{
-						td[k2].join();
-					}
-					outputname[strlen(outputname) - 6] = fcount / 10 + '0';
-					outputname[strlen(outputname) - 5] = fcount % 10 + '0';
-					outputflagname[strlen(outputflagname) - 6] = fcount / 10 + '0';
-					outputflagname[strlen(outputflagname) - 5] = fcount % 10 + '0';
-					FILE *outfile1 = fopen(outputname, "wb");
-					FILE *outfile2 = fopen(outputflagname, "wb");
-
-					fwrite(outputcache, sizeof(float), px[4] * sampling_size * 3, outfile1);
-					fwrite(gtcache, sizeof(float), px[4] * 3, outfile2);
-					fclose(outfile1);
-					fclose(outfile2);
-					count = 0;
-					fcount++;
-
-					memset(outputcache, 0, px[4] * sampling_size * 3 * sizeof(float));
-					memset(gtcache, 0, px[4] * 3 * sizeof(float));
-					for (int k1 = 0; k1 < thread_number; k1++)
-						thread_p[k1].clear();
-				}
+				std::vector<int> patches = getPatch(meshlist[k0], index, nfaces);
+				generatePatchFile(patchname, patches, index == 0);
 			}
-		}
-		if (count > 0)
-		{
-			printf("error\n");
-			return 0;
 		}
 	}
 	delete outputcache;

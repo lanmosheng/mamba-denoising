@@ -345,7 +345,7 @@ int main()
 	preprocessing(noisymesh);
 
 	int n_faces = noisymesh.n_faces();
-	std::vector<int> traindata = globalSampling(noisymesh, flagz, n_faces);
+	std::vector<int> traindata = getPatch(noisymesh, 5178, n_faces);
 
 	for (int i = 10; i <= 100; i += 10)
 	{

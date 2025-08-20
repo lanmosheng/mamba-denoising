@@ -204,7 +204,6 @@ TriMesh::Normal getPolarAxis(TriMesh &mesh, int face_index, const std::vector<Tr
 int samplingNormal(
 	TriMesh &mesh,
 	int index,
-	const Eigen::Matrix3d &d2,
 	const TriMesh::Normal &startnormal,
 	const std::vector<TriMesh::Point> &face_centroid,
 	const std::vector<TriMesh::Normal> &noisy_normals,
@@ -242,7 +241,6 @@ int samplingNormal(
 				noisy_normals[centreface].data()[0],
 				noisy_normals[centreface].data()[1],
 				noisy_normals[centreface].data()[2]);
-			temp5 = d2 * temp5;
 			temp5.normalize();
 			outputmat[i * 3] = (float)temp5[0];
 			outputmat[i * 3 + 1] = (float)temp5[1];
@@ -280,7 +278,6 @@ int samplingNormal(
 						noisy_normals[nowface.idx()][0],
 						noisy_normals[nowface.idx()][1],
 						noisy_normals[nowface.idx()][2]);
-					temp5 = d2 * temp5;
 					temp5.normalize();
 
 					outputmat[i * 3 + 0] = (float)temp5[0];
@@ -328,23 +325,27 @@ int samplingNormal(
 	return 1;
 }
 
-std::vector<int> globalSampling(TriMesh &mesh, const std::vector<int> &flagz, const int n_faces)
+std::vector<int> getPatch(TriMesh &mesh, int index, const int n_faces)
 {
-	std::unordered_set<int> visited;
 	std::vector<int> ret;
 
 	auto bfs = [&](int start)
 	{
+		std::unordered_set<int> visited;
 		std::queue<int> q;
 		q.push(start);
 		visited.insert(start);
-
+		int count = 0;
 		while (!q.empty())
 		{
 			int cur = q.front();
 			q.pop();
 			ret.push_back(cur);
-
+			count++;
+			if (count == patch_num)
+			{
+				return;
+			}
 			for (TriMesh::FaceFaceIter ff_it = mesh.ff_begin(TriMesh::FaceHandle(cur)); ff_it.is_valid(); ff_it++)
 			{
 				int nxt = ff_it->idx();
@@ -357,25 +358,11 @@ std::vector<int> globalSampling(TriMesh &mesh, const std::vector<int> &flagz, co
 		}
 	};
 
-	for (int i = 0; i < n_faces; i++)
-	{
-		if (visited.count(i))
-			continue;
-		if (flagz[i] < 0)
-			continue;
-		bfs(i);
-	}
+	bfs(index);
 
-	for (int i = 0; i < n_faces; i++)
+	if (ret.size() != patch_num)
 	{
-		if (visited.count(i))
-			continue;
-		bfs(i);
-	}
-
-	if (ret.size() != n_faces)
-	{
-		std::cerr << "Warning: not all faces included in sampling!" << std::endl;
+		printf("Get Patch Error, Face %d Only get %d faces\n", index, ret.size());
 	}
 
 	return ret;
