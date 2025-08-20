@@ -36,3 +36,5 @@ test_sampling
 !thirdparty/.gitkeep
 
 out/logs/*
+*.pub
+meta.json
