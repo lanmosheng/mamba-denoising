@@ -243,6 +243,10 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < 3; i++)
 		fscanf(profile, "%d", &px[i]);
 
+	int skip_lsd, skip_patch;
+
+	fscanf(profile, "%d%d", &skip_lsd, &skip_patch);
+	
 	for (int nom = px[0]; nom < px[1]; nom += px[2])
 	{
 		preprocessing(
@@ -283,19 +287,21 @@ int main(int argc, char *argv[])
 		mkfolder(outputname);
 
 		int nfaces = meshlist[k0].n_faces();
-		for (int index = 0; index < nfaces; index++)
+		if (!skip_lsd)
 		{
-			// printf("%d/%d\r", index, nfaces);
-			if (gLSD(index, noisemeshlist[k0], outputcache, gtcache, sigma_s_list[k0], ringlist_list[k0], filtered_normals_list[k0], halfedgeset_list[k0], noisy_normals_list[k0], face_centroid_list[k0], flagz_list[k0]) == -4)
+			printf("Generate LSD\n");
+			for (int index = 0; index < nfaces; index++)
 			{
-				printf("LSD Error %s faceindex %d\n", mesh_n[k0].c_str(), index);
-				exit(1);
+				if (gLSD(index, noisemeshlist[k0], outputcache, gtcache, sigma_s_list[k0], ringlist_list[k0], filtered_normals_list[k0], halfedgeset_list[k0], noisy_normals_list[k0], face_centroid_list[k0], flagz_list[k0]) == -4)
+				{
+					printf("LSD Error %s faceindex %d\n", mesh_n[k0].c_str(), index);
+					exit(1);
+				}
+				generateFile(outputname, outputcache, gtcache, index == 0);
+				memset(outputcache, 0, sampling_size * 3 * sizeof(float));
+				memset(gtcache, 0, 3 * sizeof(float));
 			}
-			generateFile(outputname, outputcache, gtcache, index == 0);
-			memset(outputcache, 0, sampling_size * 3 * sizeof(float));
-			memset(gtcache, 0, 3 * sizeof(float));
 		}
-		printf("\n");
 		if (!skip_patch)
 		{
 			printf("Generate Patch\n");
