@@ -438,3 +438,5 @@ void generateLocalSamplingOrder(std::vector<SampleDirection> &local_sample)
 		}
 	}
 }
+
+

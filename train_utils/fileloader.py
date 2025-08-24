@@ -16,8 +16,10 @@ def _list_mesh_dirs(dataset_root: str) -> List[str]:
     mesh_dirs.sort()
     return mesh_dirs
 
+
 def _default_meta_path(dataset_root: str) -> str:
     return os.path.join(dataset_root, 'meta.json')
+
 
 def _load_meta(meta_path: str) -> Dict:
     with open(meta_path, 'r') as f:
@@ -27,42 +29,27 @@ def _load_meta(meta_path: str) -> Dict:
             raise KeyError(f"Missing '{k}' in meta.json")
     return meta
 
-def _resolve_patch_path(mesh_dir: str, patch_root: Optional[str] = None, dataset_root: Optional[str] = None) -> str:
+
+def _resolve_patch_path(mesh_dir: str, patch_root: Optional[str] = None) -> str:
     """
     Resolve patch_faces.npy path for a given mesh:
-      1) <patch_root>/<mesh_name>/patch_faces.npy
-      2) <dataset_root>/patches/<mesh_name>/patch_faces.npy
-      3) <mesh_dir>/patches/patch_faces.npy
+      REQUIRED: patch_root must be provided and point to a separate folder tree,
+      with layout: <patch_root>/<mesh_name>/patch_faces.npy
     """
+    if patch_root is None:
+        raise ValueError("patch_root is required (patches and dataset are in separate folders)")
     mesh_name = os.path.basename(mesh_dir.rstrip(os.sep))
-    tried = []
-
-    if patch_root is not None:
-        cand = os.path.join(patch_root, mesh_name, 'patch_faces.npy')
-        tried.append(cand)
-        if os.path.exists(cand):
-            return cand
-
-    if dataset_root is not None:
-        cand = os.path.join(dataset_root, 'patches', mesh_name, 'patch_faces.npy')
-        tried.append(cand)
-        if os.path.exists(cand):
-            return cand
-
-    cand = os.path.join(mesh_dir, 'patches', 'patch_faces.npy')
-    tried.append(cand)
+    cand = os.path.join(patch_root, mesh_name, 'patch_faces.npy')
     if os.path.exists(cand):
         return cand
+    raise FileNotFoundError(f"patch_faces.npy not found for mesh '{mesh_name}' under patch_root='{patch_root}'")
 
-    tried_list = "\n".join(f"- {p}" for p in tried)
-    raise FileNotFoundError(
-        f"patch_faces.npy not found for mesh '{mesh_name}'. Tried:\n{tried_list}"
-    )
 
 def _safe_norm(v: np.ndarray, eps: float = 1e-8) -> float:
     """Return max(||v||, eps) as a *lower-bounded* norm for stable normalization."""
     n = float(np.linalg.norm(v))
     return n if n > eps else eps
+
 
 def _rotation_matrix_from_a_to_b(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> np.ndarray:
     """Return 3x3 rotation matrix that rotates vector a to b."""
@@ -79,7 +66,6 @@ def _rotation_matrix_from_a_to_b(a: np.ndarray, b: np.ndarray, eps: float = 1e-8
         if c > 0.0:  # parallel
             return np.eye(3, dtype=np.float64)
         # opposite: 180° rotate around any orthogonal axis
-        # choose an axis not colinear with 'an'
         axis = np.array([1.0, 0.0, 0.0], dtype=np.float64)
         if abs(an[0]) > 0.9:
             axis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
@@ -98,6 +84,7 @@ def _rotation_matrix_from_a_to_b(a: np.ndarray, b: np.ndarray, eps: float = 1e-8
     R = np.eye(3, dtype=np.float64) + K * s + (K @ K) * (1.0 - c)
     return R
 
+
 def _zscore_patch(X: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     """Patch-level z-score over (M*N) jointly per channel of last dim=3. X: (M, N, 3)"""
     flat = X.reshape(-1, 3)
@@ -114,9 +101,12 @@ class Loader:
     """
     Patch-centric loader.
 
-    - 主数据是 patch 索引（patch_faces.npy），LSD/GT 懒切片
+    - 主数据是 patch 索引（patch_faces.npy），与 lsd/gt 分别位于独立目录：
+        dataset_root/<mesh>/lsd.npy, gt.npy
+        patch_root/<mesh>/patch_faces.npy  (K, M)  # 稀疏或稠密
     - sampling_size = lsd_r_size * lsd_t_size + 1
     - 每个 mesh 以“一个中心面=一个样本（其 patch）”展开
+    - 支持 **稀疏 patch**：patch_faces.npy 只存被选中的 K 个中心 → 形状 (K, M)
     - generate_batch 返回：
         data:  (num_batches, B, M, N, 3)
         label: (num_batches, B, M, 3)
@@ -134,6 +124,8 @@ class Loader:
                  eps: float = 1e-6):
         self.dataset_root = dataset_root
         self.patch_root = patch_root
+        if self.patch_root is None:
+            raise ValueError("patch_root must be provided because patches and dataset live in separate folders")
         self.batch_size = int(batch_size)
         self.drop_last = bool(drop_last)
         self.shuffle_faces = bool(shuffle_faces)
@@ -158,7 +150,7 @@ class Loader:
         for mdir in self.mesh_dirs:
             lsd_path = os.path.join(mdir, 'lsd.npy')
             gt_path  = os.path.join(mdir, 'gt.npy')
-            patch_path = _resolve_patch_path(mdir, patch_root=self.patch_root, dataset_root=self.dataset_root)
+            patch_path = _resolve_patch_path(mdir, patch_root=self.patch_root)
 
             lsd     = np.load(lsd_path, mmap_mode=self.mmap_mode)
             gt      = np.load(gt_path,  mmap_mode=self.mmap_mode)
@@ -168,8 +160,9 @@ class Loader:
                 raise ValueError(f"{lsd_path}: expected (nfaces,{self.sampling_size},3), got {lsd.shape}")
             if gt.ndim != 2 or gt.shape[1] != 3:
                 raise ValueError(f"{gt_path}: expected (nfaces,3), got {gt.shape}")
-            if patches.ndim != 2 or patches.shape[0] != lsd.shape[0] or patches.shape[1] != self.patch_num:
-                raise ValueError(f"{patch_path}: expected (nfaces,{self.patch_num}), got {patches.shape}")
+            # 允许 **稀疏** patch：只校验第二维等于 M
+            if patches.ndim != 2 or patches.shape[1] != self.patch_num:
+                raise ValueError(f"{patch_path}: expected (*,{self.patch_num}), got {patches.shape}")
 
             nfaces = int(lsd.shape[0])
             self._records.append((lsd_path, gt_path, patch_path, nfaces))
@@ -187,20 +180,19 @@ class Loader:
     # ----------------------------
     # internal helpers
     # ----------------------------
-    def _center_indices_for_mesh(self, patch_path: str, nfaces: int) -> np.ndarray:
-        """Load centers.npy if present; otherwise fall back to all faces. Also apply per-epoch shuffle."""
-        patch_dir = os.path.dirname(patch_path)
-        mesh_name = os.path.basename(patch_dir)  # for log
-        centers_path = os.path.join(patch_dir, 'centers.npy')
-
-        if os.path.exists(centers_path):
-            center_idx = np.load(centers_path).astype(np.int64)
-            center_idx = center_idx[(center_idx >= 0) & (center_idx < nfaces)]
-            print(f"[loader] mesh={mesh_name} centers={center_idx.size}/{nfaces}", flush=True)
-        else:
+    def _center_indices_sparse_or_dense(self, patch_faces: np.ndarray, nfaces: int, mesh_name: str) -> np.ndarray:
+        """Return row indices to iterate patches.
+        - 稠密模式：patch_faces.shape[0] == nfaces → 遍历所有行（等价于所有面）
+        - 稀疏模式：patch_faces.shape[0] != nfaces → 每一行就是一个样本
+        """
+        ncenters = int(patch_faces.shape[0])
+        dense = (ncenters == nfaces)
+        if dense:
             center_idx = np.arange(nfaces, dtype=np.int64)
-            print(f"[loader] mesh={mesh_name} centers=ALL({nfaces})", flush=True)
-
+            print(f"[loader] mesh={mesh_name} patches=DENSE rows={ncenters} (== nfaces)", flush=True)
+        else:
+            center_idx = np.arange(ncenters, dtype=np.int64)
+            print(f"[loader] mesh={mesh_name} patches=SPARSE rows={ncenters}/{nfaces}", flush=True)
         if self.shuffle_faces:
             np.random.shuffle(center_idx)
         return center_idx
@@ -221,7 +213,8 @@ class Loader:
         if patch_faces.min() < 0 or patch_faces.max() >= nfaces:
             raise IndexError(f"Illegal face index in {patch_path}. Valid range [0,{nfaces-1}]")
 
-        center_idx = self._center_indices_for_mesh(patch_path, nfaces)
+        mesh_name = os.path.basename(os.path.dirname(patch_path))
+        center_idx = self._center_indices_sparse_or_dense(patch_faces, nfaces, mesh_name)
 
         B = self.batch_size
         total = len(center_idx)
@@ -302,7 +295,8 @@ class Loader:
         if patch_faces.min() < 0 or patch_faces.max() >= nfaces:
             raise IndexError(f"Illegal face index in {patch_path}. Valid range [0,{nfaces-1}]")
 
-        center_idx = self._center_indices_for_mesh(patch_path, nfaces)
+        mesh_name = os.path.basename(os.path.dirname(patch_path))
+        center_idx = self._center_indices_sparse_or_dense(patch_faces, nfaces, mesh_name)
 
         B = self.batch_size
         total = len(center_idx)
@@ -344,7 +338,6 @@ class Loader:
                 X_rot = X_rot.reshape(self.patch_num, self.sampling_size, 3)
                 Y_rot = Y @ R.T
 
-                # use same z-score helper for consistency
                 Xn = _zscore_patch(X_rot, eps=self.eps)
 
                 Xb[i] = Xn.astype(np.float32)
@@ -354,16 +347,10 @@ class Loader:
             yield Xb, Yb
 
     def count_batches(self, mesh_idx: int) -> int:
-        """Return number of batches for this mesh, honoring centers.npy and drop_last."""
+        """Return number of batches for this mesh, honoring sparse patch_faces and drop_last."""
         _, _, patch_path, nfaces = self._records[int(mesh_idx)]
-        # prefer centers.npy
-        patch_dir = os.path.dirname(patch_path)
-        centers_path = os.path.join(patch_dir, 'centers.npy')
-        if os.path.exists(centers_path):
-            total = int(np.load(centers_path).size)
-            # clamp to bounds just in case
-            total = int(total)
-        else:
-            total = nfaces
+        patch_faces = np.load(patch_path, mmap_mode=self.mmap_mode)
+        ncenters = int(patch_faces.shape[0])
+        total = ncenters  # 稀疏/稠密统一按行数
         B = self.batch_size
         return total // B + (0 if self.drop_last or total % B == 0 else 1)

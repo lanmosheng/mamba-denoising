@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.cuda.amp import autocast, GradScaler
-
+import math
 class Trainer:
     """
     Trainer
@@ -164,3 +164,49 @@ class Trainer:
                 val_sum += float(loss.detach().cpu()) * B_mb
                 count += B_mb
         return val_sum / max(1, count)
+    
+        # —— 按“原版loss风格”的角度计算，支持 (B,M,3) 或 (B,3) —— 
+    def _angles_deg_like_legacy(self, pred: torch.Tensor, label: torch.Tensor, *, center_only: bool=False) -> torch.Tensor:
+        """
+        返回当前批次每个向量的角度误差（度），展平成 1D。
+        - pred, label: 形状 (B, M, 3) 或 (B, 3)
+        - center_only=True 时只取每个样本的中心面 [:,0,:]
+        逻辑参考你的原版：normalize → cosine_similarity → acos(·)*180/pi → NaN置0
+        """
+        # 设备/类型对齐 + 单位化
+        label = torch.as_tensor(label, dtype=pred.dtype, device=pred.device)
+        pred_n   = F.normalize(pred,   dim=-1, eps=1e-8)
+        label_n  = F.normalize(label,  dim=-1, eps=1e-8)
+
+        # 仅中心面（可选）
+        if pred_n.dim() == 3 and center_only:
+            pred_n  = pred_n[:, 0, :]   # (B, 3)
+            label_n = label_n[:, 0, :]
+
+        # 逐向量余弦与角度
+        cos = (pred_n * label_n).sum(dim=-1)                 # (B,M) 或 (B,)
+        cos = torch.clamp(cos, -1.0 + 1e-7, 1.0 - 1e-7)
+        ang = torch.acos(cos) * (180.0 / math.pi)            # 度
+
+        # NaN/Inf 保护，按你的原版思路置 0
+        ang = torch.where(torch.isfinite(ang), ang, torch.zeros_like(ang))
+        return ang.reshape(-1)                                # 扁平化，便于统计均值
+
+    def evaluate_angle(self, val_loader, sampling_size, *, center_only: bool=False) -> float:
+        """
+        验证：返回“平均角度误差（度）”
+        - center_only=True：只统计各样本的中心面角度
+        """
+        self.model.eval()
+        total_sum = 0.0
+        total_cnt = 0
+        with torch.no_grad():
+            for i in range(val_loader.length()):
+                for d, y in val_loader.iter_batches(i, sampling_size):
+                    # DataParallel 需要 CPU Tensor 输入；DP 会自动 scatter 到多卡
+                    d = torch.as_tensor(d, dtype=torch.float32)   # 留在 CPU
+                    pred = self.model(d)                          # (B, M, 3)
+                    ang = self._angles_deg_like_legacy(pred, y, center_only=center_only)
+                    total_sum += float(ang.sum().cpu())
+                    total_cnt += int(ang.numel())
+        return total_sum / max(1, total_cnt)

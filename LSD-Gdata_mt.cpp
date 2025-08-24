@@ -166,6 +166,51 @@ bool write_meta(const std::string &dir)
 	ofs.close();
 	return ofs.good();
 }
+void face_neighbors_by_edge(TriMesh &mesh, int f, std::vector<int> &out)
+{
+	out.clear();
+	for (TriMesh::FaceHalfedgeIter fhe = mesh.fh_begin(TriMesh::FaceHandle(f));
+		 fhe.is_valid(); ++fhe)
+	{
+		auto oppF = mesh.opposite_face_handle(*fhe);
+		if (oppF.is_valid())
+			out.push_back(oppF.idx());
+	}
+}
+// B) 以“边相邻”为基础的环距 BFS：返回 [0..R] 内（闭包）的面集合
+static void bfs_rings_edge(TriMesh &mesh, int center, int R, std::vector<int> &out)
+{
+	out.clear();
+	const int nfaces = mesh.n_faces();
+	std::vector<char> vis(nfaces, 0);
+	std::vector<int> cur, nxt;
+	cur.push_back(center);
+	vis[center] = 1;
+	out.push_back(center);
+
+	for (int r = 0; r < R; ++r)
+	{
+		nxt.clear();
+		for (int f : cur)
+		{
+			std::vector<int> nbs;
+			face_neighbors_by_edge(mesh, f, nbs);
+			for (int nb : nbs)
+			{
+				if (!vis[nb])
+				{
+					vis[nb] = 1;
+					nxt.push_back(nb);
+					out.push_back(nb);
+				}
+			}
+		}
+		if (nxt.empty())
+			break;
+		cur.swap(nxt);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	int profile_num = 0;
@@ -246,7 +291,7 @@ int main(int argc, char *argv[])
 	int skip_lsd, skip_patch;
 
 	fscanf(profile, "%d%d", &skip_lsd, &skip_patch);
-	
+
 	for (int nom = px[0]; nom < px[1]; nom += px[2])
 	{
 		preprocessing(
@@ -283,12 +328,11 @@ int main(int argc, char *argv[])
 		if (pos != std::string::npos)
 			name.erase(pos);
 
-		std::string outputname = outputfile + name;
-		mkfolder(outputname);
-
 		int nfaces = meshlist[k0].n_faces();
 		if (!skip_lsd)
 		{
+			std::string outputname = outputfile + name;
+			mkfolder(outputname);
 			printf("Generate LSD\n");
 			for (int index = 0; index < nfaces; index++)
 			{
@@ -304,13 +348,59 @@ int main(int argc, char *argv[])
 		}
 		if (!skip_patch)
 		{
-			printf("Generate Patch\n");
+			printf("Generate Patch (Poisson-Disk centers, edge-adj)\n");
 			std::string patchname = patchfile + name;
 			mkfolder(patchname);
-			for (int index = 0; index < nfaces; index++)
+
+			const int nfaces_local = nfaces;							 // 或 meshlist[k0].n_faces()
+			const int K_patch = /* 你构建 patch 所用的“环层半径 K” */ 6; // 不确定就随便先给，或用 r_block_override
+			const int M_expected = patch_num;
+
+			// 1) 配置 Poisson 生成器（按边相邻）
+			PoissonDiskCenterGen gen(
+				nfaces_local,
+				K_patch,
+				0.5, // 阻隔系数：越大中心越稀疏；0.5~0.7 常用
+				3,	 // 若不知道 K，可改成具体环距 r_block（如 5）
+				true,
+				42);
+
+			// 2) 回调：环距 BFS 用“边相邻”，patch 仍用你现有 getPatch
+			gen.set_bfs_rings([&](int c, int R, std::vector<int> &out)
+							  {
+								  bfs_rings_edge(meshlist[k0], c, R, out); // ← 用上面的实现
+							  });
+			gen.set_get_patch([&](int c, int /*M*/, std::vector<int> &out)
+							  {
+								  out = getPatch(meshlist[k0], c, nfaces_local); // 你已有的接口
+							  });
+
+			// 3) 在线选中心（不做 IOU、不过滤）
+			const int max_centers = -1; // 可设上限避免爆时长；-1=不限
+			const std::vector<int> &centers = gen.run(max_centers);
+
+			// 4) （可选）补洞，确保 coverage≈1.0（薄片/孔洞时有用）
+			// gen.fill_gaps_if_any(/*M=*/M_expected, /*r_block_fill=*/-1);
+
+			// 5) 打印统计
+			if (M_expected > 0)
 			{
-				std::vector<int> patches = getPatch(meshlist[k0], index, nfaces);
-				generatePatchFile(patchname, patches, index == 0);
+				auto st = gen.stats(/*check_cover_with_patch=*/true, /*M=*/M_expected);
+				printf("[centers] r_block=%d | count=%zu | coverage=%.3f (%d/%d) | avg_cov=%.2f | max_cov=%d\n",
+					   gen.r_block_used(), centers.size(), st.coverage_rate, st.covered_faces, nfaces_local,
+					   st.avg_cov, st.max_cov);
+			}
+			else
+			{
+				printf("[centers] r_block=%d | count=%zu\n", gen.r_block_used(), centers.size());
+			}
+
+			// 6) 仅为“选中中心”写 patch
+			for (size_t i = 0; i < centers.size(); ++i)
+			{
+				int c = centers[i];
+				std::vector<int> patches = getPatch(meshlist[k0], c, nfaces_local);
+				generatePatchFile(patchname, patches, /*is_first=*/i == 0);
 			}
 		}
 	}

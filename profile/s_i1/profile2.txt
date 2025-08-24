@@ -9,4 +9,4 @@ strain/octa-flower_n3.obj
 strain/fandisk_n2.obj
 dataset_s_i1/dev1001/
 patches/
-0 4 1 0 0
+0 4 1 1 0

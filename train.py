@@ -120,13 +120,16 @@ for epoch_it in range(epochs):
     checkpoint_io.save('model.pt', epoch_it=epoch_it)
 
     # 验证
-    metric_val = trainer.evaluate(dev_loader, sampling_size)
-    logfile.write(f"Validation metric : {metric_val:.6f}\n")
-    logfile.flush()
+    # 角度（度）验证
+    metric_val_deg = trainer.evaluate_angle(dev_loader, sampling_size, center_only=False)
+    logfile.write(f"Validation angle (deg): {metric_val_deg:.3f}\n"); logfile.flush()
+    logger.add_scalar('val/angle_deg', metric_val_deg, epoch_it); logger.flush()
 
-    if metric_val < metric_val_best:
-        metric_val_best = metric_val
-        checkpoint_io.save('model_best.pt', epoch_it=epoch_it)
+# 以角度作为更优判据
+    if metric_val_deg < metric_val_best:
+        metric_val_best = metric_val_deg
+        checkpoint_io.save('model_best.pt', epoch_it=epoch_it, loss_val_best=metric_val_best)
+
     logfile.write(f"Now best model metric: {metric_val_best:.6f}\n")
 
 logger.close()
