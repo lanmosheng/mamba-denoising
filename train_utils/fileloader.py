@@ -111,6 +111,7 @@ class Loader:
         data:  (num_batches, B, M, N, 3)
         label: (num_batches, B, M, 3)
     - 返回前做 patch 级 z-score + patch-wise 旋转到 (1,0,0)
+      （旋转锚点来自 LSD 的可观测信息，不依赖 GT）
     """
     def __init__(self,
                  dataset_root: str,
@@ -243,17 +244,23 @@ class Loader:
                 X = lsd[faces]                    # (M,N,3)
                 Y = gt[faces]                     # (M,3)
 
-                # anchor selection
+                # anchor selection (use OBSERVABLE LSD, not GT)
+                centers = X[:, 0, :]  # (M,3) center sample per face
                 if self.rotation_anchor == 'center':
-                    anchor = Y[0]
+                    anchor = centers[0]
                 else:  # 'mean'
-                    Yn = Y / np.maximum(np.linalg.norm(Y, axis=1, keepdims=True), self.eps)
-                    anchor = Yn.mean(axis=0)
+                    norms = np.linalg.norm(centers, axis=1, keepdims=True)
+                    valid = (norms > self.eps).squeeze(1)
+                    if valid.any():
+                        anchor = (centers[valid] / np.maximum(norms[valid], self.eps)).mean(axis=0)
+                    else:
+                        anchor = centers.mean(axis=0)
 
-                # degenerate fallback: zero/NaN anchor -> use mean valid; still bad -> +X
-                if np.linalg.norm(anchor) < 1e-6 or not np.isfinite(anchor).all():
-                    mask = np.isfinite(Y).all(axis=1) & (np.linalg.norm(Y, axis=1) > 1e-6)
-                    anchor = (Y[mask].mean(axis=0) if mask.any()
+                # degenerate fallback: if invalid/near-zero, fall back to robust mean, then +X
+                if (not np.isfinite(anchor).all()) or (np.linalg.norm(anchor) < 1e-6):
+                    flat = X.reshape(-1, 3)
+                    mask = np.isfinite(flat).all(axis=1)
+                    anchor = (flat[mask].mean(axis=0) if mask.any()
                               else np.array([1.0, 0.0, 0.0], dtype=np.float64))
 
                 R = _rotation_matrix_from_a_to_b(anchor, target, eps=self.eps)
@@ -320,16 +327,22 @@ class Loader:
                 X = lsd[faces]                        # (M,N,3)
                 Y = gt[faces]                         # (M,3)
 
-                # anchor selection
+                # anchor selection (use OBSERVABLE LSD, not GT)
+                centers = X[:, 0, :]  # (M,3)
                 if self.rotation_anchor == 'center':
-                    anchor = Y[0]
+                    anchor = centers[0]
                 else:
-                    Yn = Y / np.maximum(np.linalg.norm(Y, axis=1, keepdims=True), self.eps)
-                    anchor = Yn.mean(axis=0)
+                    norms = np.linalg.norm(centers, axis=1, keepdims=True)
+                    valid = (norms > self.eps).squeeze(1)
+                    if valid.any():
+                        anchor = (centers[valid] / np.maximum(norms[valid], self.eps)).mean(axis=0)
+                    else:
+                        anchor = centers.mean(axis=0)
 
-                if np.linalg.norm(anchor) < 1e-6 or not np.isfinite(anchor).all():
-                    mask = np.isfinite(Y).all(axis=1) & (np.linalg.norm(Y, axis=1) > 1e-6)
-                    anchor = (Y[mask].mean(axis=0) if mask.any()
+                if (not np.isfinite(anchor).all()) or (np.linalg.norm(anchor) < 1e-6):
+                    flat = X.reshape(-1, 3)
+                    mask = np.isfinite(flat).all(axis=1)
+                    anchor = (flat[mask].mean(axis=0) if mask.any()
                               else np.array([1.0, 0.0, 0.0], dtype=np.float64))
 
                 R = _rotation_matrix_from_a_to_b(anchor, target, eps=self.eps)

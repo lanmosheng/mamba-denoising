@@ -222,20 +222,6 @@ class TwoStageMamba(nn.Module):
         self.use_aux_face_loss = use_aux_face_loss
         self.residual_final = residual_final
         self.grad_scale_s = float(grad_scale_s)
-        if self.use_aux_face_loss:
-            self.face_aux_head = nn.Linear(d_model, 3)
-
-        # 你原本的模块
-        self.face_encoder = FaceEncoder(
-            d_model=d_model,
-            depth=face_depth,
-            # ...
-        )
-        self.patch_encoder = PatchEncoder(
-            d_model=d_model,
-            depth=patch_depth,
-            # ...
-        )
 
         # 新：一层的“法向初稿”头（d -> 3）
         if self.use_aux_face_loss:
