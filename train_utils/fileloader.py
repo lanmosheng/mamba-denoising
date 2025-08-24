@@ -243,18 +243,26 @@ class Loader:
                 X = lsd[faces]                    # (M,N,3)
                 Y = gt[faces]                     # (M,3)
 
-                # anchor selection
+                # anchor selection from observed LSD (no GT)
+                center_dirs = X[:, self.sampling_size - 1]
                 if self.rotation_anchor == 'center':
-                    anchor = Y[0]
+                    anchor = center_dirs[0]
                 else:  # 'mean'
-                    Yn = Y / np.maximum(np.linalg.norm(Y, axis=1, keepdims=True), self.eps)
-                    anchor = Yn.mean(axis=0)
+                    center_norm = center_dirs / np.maximum(
+                        np.linalg.norm(center_dirs, axis=1, keepdims=True), self.eps
+                    )
+                    anchor = center_norm.mean(axis=0)
 
                 # degenerate fallback: zero/NaN anchor -> use mean valid; still bad -> +X
                 if np.linalg.norm(anchor) < 1e-6 or not np.isfinite(anchor).all():
-                    mask = np.isfinite(Y).all(axis=1) & (np.linalg.norm(Y, axis=1) > 1e-6)
-                    anchor = (Y[mask].mean(axis=0) if mask.any()
-                              else np.array([1.0, 0.0, 0.0], dtype=np.float64))
+                    mask = np.isfinite(center_dirs).all(axis=1) & (
+                        np.linalg.norm(center_dirs, axis=1) > 1e-6
+                    )
+                    anchor = (
+                        center_dirs[mask].mean(axis=0)
+                        if mask.any()
+                        else np.array([1.0, 0.0, 0.0], dtype=np.float64)
+                    )
 
                 R = _rotation_matrix_from_a_to_b(anchor, target, eps=self.eps)
 
@@ -320,17 +328,25 @@ class Loader:
                 X = lsd[faces]                        # (M,N,3)
                 Y = gt[faces]                         # (M,3)
 
-                # anchor selection
+                # anchor selection from observed LSD (no GT)
+                center_dirs = X[:, self.sampling_size - 1]
                 if self.rotation_anchor == 'center':
-                    anchor = Y[0]
+                    anchor = center_dirs[0]
                 else:
-                    Yn = Y / np.maximum(np.linalg.norm(Y, axis=1, keepdims=True), self.eps)
-                    anchor = Yn.mean(axis=0)
+                    center_norm = center_dirs / np.maximum(
+                        np.linalg.norm(center_dirs, axis=1, keepdims=True), self.eps
+                    )
+                    anchor = center_norm.mean(axis=0)
 
                 if np.linalg.norm(anchor) < 1e-6 or not np.isfinite(anchor).all():
-                    mask = np.isfinite(Y).all(axis=1) & (np.linalg.norm(Y, axis=1) > 1e-6)
-                    anchor = (Y[mask].mean(axis=0) if mask.any()
-                              else np.array([1.0, 0.0, 0.0], dtype=np.float64))
+                    mask = np.isfinite(center_dirs).all(axis=1) & (
+                        np.linalg.norm(center_dirs, axis=1) > 1e-6
+                    )
+                    anchor = (
+                        center_dirs[mask].mean(axis=0)
+                        if mask.any()
+                        else np.array([1.0, 0.0, 0.0], dtype=np.float64)
+                    )
 
                 R = _rotation_matrix_from_a_to_b(anchor, target, eps=self.eps)
 
