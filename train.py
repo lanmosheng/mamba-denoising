@@ -201,7 +201,12 @@ for epoch in range(S1_EPOCHS):
         best_val_1 = val_loss
         ckpt1.save('stage1_best.pt', epoch_it=epoch, metric=best_val_1)
         log_print(f"[S1] Now best val loss: {best_val_1:.6f}")
-
+try:
+    ckpt1.load('stage1_best.pt')
+    log_print('[S1] Loaded stage1_best.pt into model before starting S2.')
+except FileNotFoundError:
+    log_print('[S1] stage1_best.pt not found; proceed with last-epoch weights.')
+    
 # =========================
 # S2：只训 Patch（Face 冻结）
 # =========================

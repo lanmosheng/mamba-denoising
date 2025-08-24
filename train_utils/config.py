@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 import torch
 
-try:
-    from train_utils.model_mamba import TwoStageMamba
-except ImportError:
-    # 若你放在 coder.py，则改为 from coder import TwoStageMamba
-    from train_utils.model_mamba import TwoStageMamba
+
+from train_utils.model_mamba import TwoStageMamba
 
 def get_model(
     device: torch.device,

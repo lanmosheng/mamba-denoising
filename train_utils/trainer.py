@@ -61,6 +61,10 @@ class Trainer:
     # --- 训练一步（支持微批循环的话，按你原来逻辑套进去即可） ---
     def train_step(self, data, target):
         self.model.train()
+        if isinstance(data, np.ndarray):
+            data = torch.from_numpy(data)
+        if isinstance(target, np.ndarray):
+            target = torch.from_numpy(target)
         data = data.to(self.device, non_blocking=True)
         target = target.to(self.device, non_blocking=True)
 
