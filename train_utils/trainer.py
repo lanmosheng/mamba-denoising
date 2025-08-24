@@ -1,212 +1,123 @@
-# -*- coding: utf-8 -*-
-import os
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
+# 顶部 import
 import math
+import torch
+import torch.nn.functional as F
+
 class Trainer:
-    """
-    Trainer
-    - 支持 nn.DataParallel（多卡）
-    - AMP 兼容老版本 autocast
-    - microbatch 梯度累积
-    """
-    def __init__(self, model, optimizer, device=None,
-                 use_amp=True, amp_dtype=torch.float16,
-                 microbatch_size=None,
-                 input_type='img', vis_dir=None, threshold=0.5, eval_sample=False):
+    def __init__(self, model, optimizer, logger=None, cfg=None, device='cuda'):
         self.model = model
-        self.optimizer = optimizer
+        self.opt = optimizer
+        self.logger = logger
         self.device = device
-        self.use_amp = bool(use_amp and (device is not None and 'cuda' in str(device)))
-        self.amp_dtype = amp_dtype
-        self.microbatch_size = microbatch_size
-        self.input_type = input_type
-        self.vis_dir = vis_dir
-        self.threshold = threshold
-        self.eval_sample = eval_sample
+        # 超参（可从 cfg 注入）
+        self.aux_face_weight = getattr(cfg, "aux_face_weight", 0.1)     # 建议 0.05~0.2
+        self.aux_center_only = getattr(cfg, "aux_center_only", True)    # 只监督中心面
+        self.patch_detach = getattr(cfg, "patch_detach", False)         # True=完全切断（阶段2）
+        self.patch_grad_scale = getattr(cfg, "patch_grad_scale", 0.0)   # 阶段3用，如 0.1
 
-        self.scaler = GradScaler(enabled=self.use_amp)
-
-        if vis_dir is not None and not os.path.exists(vis_dir):
-            os.makedirs(vis_dir)
-
-    # ---------- helpers ----------
-    def _use_dataparallel(self) -> bool:
-        return isinstance(self.model, nn.DataParallel)
-
-    def _to_tensor(self, x):
+    # --- 核心：计算合成损失 ---
+    def compute_loss_two_head(self, out, target):
         """
-        统一把 numpy -> Tensor；
-        - 若 DataParallel：保持 CPU Tensor，交由 DP scatter 到各卡
-        - 若 单卡 CUDA：迁移到 self.device
+        out: (n_hat, n1) or n_hat
+        target: (B,M,3)
+        return: total_loss, dict(metrics)
         """
-        if isinstance(x, torch.Tensor):
-            t = x.detach().to(dtype=torch.float32).contiguous()
-        else:
-            t = torch.as_tensor(x, dtype=torch.float32).contiguous()
+        tgt_n = F.normalize(target.to(self.device), dim=-1, eps=1e-8)
 
-        if self._use_dataparallel():
-            # 让 DataParallel 自动 scatter CPU -> 多卡
-            return t.cpu()
-        else:
-            # 单卡：直接搬到指定 device
-            return t.to(self.device)
+        if isinstance(out, tuple):
+            n_hat, n1 = out
+            n_hat = F.normalize(n_hat, dim=-1, eps=1e-8)
+            n1    = F.normalize(n1,    dim=-1, eps=1e-8)
 
-    def _iter_micro(self, data, label):
-        """把 (B, ...) 按 microbatch_size 切分做累积；None 则不切分。"""
-        if self.microbatch_size is None:
-            yield data, label
-            return
-        B = data.shape[0]
-        mb = int(self.microbatch_size)
-        for s in range(0, B, mb):
-            e = min(s + mb, B)
-            yield data[s:e], label[s:e]
+            # 主损失（最终输出）
+            loss_main = F.mse_loss(n_hat, tgt_n)
 
-    def _autocast_ctx(self):
-        """兼容旧版 AMP：老版没有 device_type / dtype 参数。"""
-        try:
-            return autocast(dtype=self.amp_dtype, enabled=self.use_amp)
-        except TypeError:
-            return autocast(enabled=self.use_amp)
-
-    # ---------- core api ----------
-    # train_utils/trainer.py
-
-    def compute_loss(self, pred, target, *, save_debug=False, debug_prefix="debug"):
-        """
-        pred/target: (B, M, 3)
-        使用单位化后的 MSE（等价于 1-cos 的稳定形式）
-        """
-        # —— 关键：把 target 搬到 pred 的 device/dtype —— #
-        if not isinstance(pred, torch.Tensor):
-            pred = torch.as_tensor(pred)
-        if not isinstance(target, torch.Tensor):
-            target = torch.as_tensor(target)
-
-        # pred 来自 DataParallel 的主卡（cuda:0）；让 target 对齐它
-        target = target.to(device=pred.device, dtype=pred.dtype, non_blocking=True)
-        pred   = pred.to(device=pred.device, dtype=pred.dtype, non_blocking=True)
-
-        if pred.shape != target.shape or pred.shape[-1] != 3:
-            raise ValueError(f"Shape mismatch: pred {pred.shape}, target {target.shape}")
-
-        if torch.isnan(pred).any() or torch.isinf(pred).any() or \
-        torch.isnan(target).any() or torch.isinf(target).any():
-            if save_debug:
-                torch.save({"pred": pred.detach().cpu(),
-                            "target": target.detach().cpu()},
-                        f"{debug_prefix}_dump.pt")
-            raise ValueError("[Loss Debug] NaN/Inf detected")
-
-        pred_n   = F.normalize(pred,   dim=-1, eps=1e-8)
-        target_n = F.normalize(target, dim=-1, eps=1e-8)
-        loss = F.mse_loss(pred_n, target_n)
-        return loss
-
-
-    def train_step(self, data, label):
-        """
-        data:  (B, M, N, 3)  - numpy / tensor(任意设备)
-        label: (B, M, 3)
-        用 forward(model(...)) 触发 DataParallel 多卡拆分
-        """
-        self.model.train()
-        self.optimizer.zero_grad(set_to_none=True)
-
-        data  = self._to_tensor(data)
-        label = self._to_tensor(label)
-
-        total_loss = 0.0
-        n_micro = 0
-
-        for d_mb, y_mb in self._iter_micro(data, label):
-            with self._autocast_ctx():
-                pred = self.model(d_mb)         # (B_mb, M, 3)
-                loss = self.compute_loss(pred, y_mb)
-
-            if self.use_amp:
-                self.scaler.scale(loss).backward()
+            # 辅助损失（一层初稿）
+            if self.aux_center_only:
+                loss_face = F.mse_loss(n1[:, :1, :], tgt_n[:, :1, :])
             else:
-                loss.backward()
+                loss_face = F.mse_loss(n1, tgt_n)
 
-            total_loss += float(loss.detach().cpu())
-            n_micro += 1
+            loss = loss_main + self.aux_face_weight * loss_face
+            metrics = {
+                "loss_main": float(loss_main.detach().cpu()),
+                "loss_face": float(loss_face.detach().cpu()),
+                "loss": float(loss.detach().cpu()),
+            }
+            return loss, metrics
 
-        if self.use_amp:
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-        else:
-            self.optimizer.step()
+        # 仅主输出（兼容老路径）
+        n_hat = F.normalize(out, dim=-1, eps=1e-8)
+        loss = F.mse_loss(n_hat, tgt_n)
+        return loss, {"loss": float(loss.detach().cpu())}
 
-        return total_loss / max(1, n_micro)
+    # --- 角度指标（度） ---
+    def _angle_deg(self, pred, target):
+        pn = F.normalize(pred,   dim=-1, eps=1e-8)
+        tn = F.normalize(target, dim=-1, eps=1e-8)
+        cos = torch.sum(pn * tn, dim=-1).clamp(-1 + 1e-7, 1 - 1e-7)
+        return torch.acos(cos) * (180.0 / math.pi)  # (B,M)
 
-    def eval_step(self, data, label):
-        """评估不反传。"""
+    # --- 训练一步（支持微批循环的话，按你原来逻辑套进去即可） ---
+    def train_step(self, data, target):
+        self.model.train()
+        data = data.to(self.device, non_blocking=True)
+        target = target.to(self.device, non_blocking=True)
+
+        self.opt.zero_grad(set_to_none=True)
+        # 关键：在这里控制二层梯度回流
+        out = self.model(
+            data,
+            patch_grad_s=self.patch_grad_scale,  # 例如 0.1 = 回流 10% 梯度
+            detach_patch=self.patch_detach,      # True 时强制切断
+        )
+        loss, metrics = self.compute_loss_two_head(out, target)
+        loss.backward()
+        self.opt.step()
+
+        # 可选日志
+        if self.logger is not None and "loss_main" in metrics:
+            self.logger.add_scalar("train/loss_main", metrics["loss_main"])
+            self.logger.add_scalar("train/loss_face", metrics["loss_face"])
+        return metrics["loss"]
+
+    # --- 验证（只看主输出） ---
+    def evaluate(self, dev_loader, sampling_size):
         self.model.eval()
-        data  = self._to_tensor(data)
-        label = self._to_tensor(label)
+        total_loss, total_cnt = 0.0, 0
         with torch.no_grad():
-            with self._autocast_ctx():
-                pred = self.model(data)
-                loss = self.compute_loss(pred, label)
-        return loss
+            for i in range(dev_loader.length()):
+                data_batches, label_batches = dev_loader.generate_batch(i, sampling_size)
+                for j in range(data_batches.shape[0]):
+                    d = torch.from_numpy(data_batches[j]).to(self.device)
+                    y = torch.from_numpy(label_batches[j]).to(self.device)
+                    out = self.model(d, detach_patch=True)  # eval 时无梯度；detach=True 更保险
+                    n_hat = out[0] if isinstance(out, tuple) else out
+                    n_hat = F.normalize(n_hat, dim=-1, eps=1e-8)
+                    y_n   = F.normalize(y,     dim=-1, eps=1e-8)
+                    loss  = F.mse_loss(n_hat, y_n)
+                    B = d.shape[0]
+                    total_loss += float(loss.detach().cpu()) * B
+                    total_cnt  += B
+        return total_loss / max(1, total_cnt)
 
-    def evaluate(self, val_loader, sampling_size):
-        val_sum = 0.0
-        count = 0
-        for i in range(val_loader.length()):
-            for d, y in val_loader.iter_batches(i, sampling_size):
-                loss = self.eval_step(d, y)
-                B_mb = d.shape[0]
-                val_sum += float(loss.detach().cpu()) * B_mb
-                count += B_mb
-        return val_sum / max(1, count)
-    
-        # —— 按“原版loss风格”的角度计算，支持 (B,M,3) 或 (B,3) —— 
-    def _angles_deg_like_legacy(self, pred: torch.Tensor, label: torch.Tensor, *, center_only: bool=False) -> torch.Tensor:
-        """
-        返回当前批次每个向量的角度误差（度），展平成 1D。
-        - pred, label: 形状 (B, M, 3) 或 (B, 3)
-        - center_only=True 时只取每个样本的中心面 [:,0,:]
-        逻辑参考你的原版：normalize → cosine_similarity → acos(·)*180/pi → NaN置0
-        """
-        # 设备/类型对齐 + 单位化
-        label = torch.as_tensor(label, dtype=pred.dtype, device=pred.device)
-        pred_n   = F.normalize(pred,   dim=-1, eps=1e-8)
-        label_n  = F.normalize(label,  dim=-1, eps=1e-8)
-
-        # 仅中心面（可选）
-        if pred_n.dim() == 3 and center_only:
-            pred_n  = pred_n[:, 0, :]   # (B, 3)
-            label_n = label_n[:, 0, :]
-
-        # 逐向量余弦与角度
-        cos = (pred_n * label_n).sum(dim=-1)                 # (B,M) 或 (B,)
-        cos = torch.clamp(cos, -1.0 + 1e-7, 1.0 - 1e-7)
-        ang = torch.acos(cos) * (180.0 / math.pi)            # 度
-
-        # NaN/Inf 保护，按你的原版思路置 0
-        ang = torch.where(torch.isfinite(ang), ang, torch.zeros_like(ang))
-        return ang.reshape(-1)                                # 扁平化，便于统计均值
-
-    def evaluate_angle(self, val_loader, sampling_size, *, center_only: bool=False) -> float:
-        """
-        验证：返回“平均角度误差（度）”
-        - center_only=True：只统计各样本的中心面角度
-        """
+    # 可选：评估角度（主输出）
+    def evaluate_angle(self, dev_loader, sampling_size, center_only=False):
         self.model.eval()
-        total_sum = 0.0
-        total_cnt = 0
+        total_ang, total_cnt = 0.0, 0
         with torch.no_grad():
-            for i in range(val_loader.length()):
-                for d, y in val_loader.iter_batches(i, sampling_size):
-                    # DataParallel 需要 CPU Tensor 输入；DP 会自动 scatter 到多卡
-                    d = torch.as_tensor(d, dtype=torch.float32)   # 留在 CPU
-                    pred = self.model(d)                          # (B, M, 3)
-                    ang = self._angles_deg_like_legacy(pred, y, center_only=center_only)
-                    total_sum += float(ang.sum().cpu())
-                    total_cnt += int(ang.numel())
-        return total_sum / max(1, total_cnt)
+            for i in range(dev_loader.length()):
+                data_batches, label_batches = dev_loader.generate_batch(i, sampling_size)
+                for j in range(data_batches.shape[0]):
+                    d = torch.from_numpy(data_batches[j]).to(self.device)
+                    y = torch.from_numpy(label_batches[j]).to(self.device)
+                    out = self.model(d, detach_patch=True)
+                    n_hat = out[0] if isinstance(out, tuple) else out
+                    ang = self._angle_deg(n_hat, y)  # (B,M)
+                    if center_only:
+                        ang = ang[:, :1]
+                    ang = ang.mean()
+                    B = d.shape[0]
+                    total_ang += float(ang.detach().cpu()) * B
+                    total_cnt += B
+        return total_ang / max(1, total_cnt)

@@ -157,52 +157,132 @@ class PatchEncoder(nn.Module):
         return F.normalize(y, dim=-1, eps=1e-8)
 
 # ---------------- 两级封装：TwoStageMamba ----------------
+def grad_scale(x: torch.Tensor, s: float) -> torch.Tensor:
+    """Return x with only s-fraction of gradient flowing back to its producers."""
+    if s <= 0.0:
+        return x.detach()
+    if s >= 1.0:
+        return x
+    return (x - x.detach()) * s + x.detach()
+
+
 class TwoStageMamba(nn.Module):
-    """
-    - FaceEncoder:  (B, M, N, 3) -> (B, M, d)
-    - PatchEncoder: (B, M, d)    -> (B, M, 3)
-    forward(X) == pred(X)
-    """
-    def __init__(self,
-                 patch_num: int,
-                 lsd_r_size: int,
-                 lsd_t_size: int,
-                 d_model: int = 64,
-                 face_depth: int = 4,
-                 patch_depth: int = 4,
-                 add_pos_emb: bool = True,
-                 add_patch_pos: bool = False,
-                 d_state: int = 16,
-                 d_conv: int = 4,
-                 expand: int = 2,
-                 residual_scale: float = 0.5,
-                 p_drop: float = 0.05):
+    def __init__(
+        self,
+        patch_num: int,              # M
+        lsd_r_size: int,             # r
+        lsd_t_size: int,             # t
+        d_model: int = 64,
+        face_depth: int = 4,
+        patch_depth: int = 4,
+        add_pos_emb: bool = True,    # 面内极坐标位置编码
+        add_patch_pos: bool = False, # patch 内位置编码
+        d_state: int = 16,
+        d_conv: int = 4,
+        expand: int = 2,
+        residual_scale: float = 0.5,
+        p_drop: float = 0.05,
+        # 以下是你实验特性（可保留）
+        use_aux_face_loss: bool = False,
+        residual_final: bool = False,
+        grad_scale_s: float = 0.0,
+    ):
         super().__init__()
+        # 暴露给外部（S1 线性头读取）
+        self.d_model = d_model
         self.M = int(patch_num)
         self.N = 1 + int(lsd_r_size) * int(lsd_t_size)
-        self.face = FaceEncoder(
-            N=self.N, d_model=d_model, depth=face_depth,
-            lsd_r_size=lsd_r_size, lsd_t_size=lsd_t_size,
+
+        self.face_encoder = FaceEncoder(
+            N=self.N,
+            d_model=d_model,
+            depth=face_depth,
+            lsd_r_size=lsd_r_size,
+            lsd_t_size=lsd_t_size,
             add_pos_emb=add_pos_emb,
-            d_state=d_state, d_conv=d_conv, expand=expand,
-            residual_scale=residual_scale, p_drop=p_drop
+            d_state=d_state,
+            d_conv=d_conv,
+            expand=expand,
+            residual_scale=residual_scale,
+            p_drop=p_drop,
         )
-        self.patch = PatchEncoder(
-            M=self.M, d_model=d_model, depth=patch_depth,
+        self.patch_encoder = PatchEncoder(
+            M=self.M,
+            d_model=d_model,
+            depth=patch_depth,
             add_patch_pos=add_patch_pos,
-            d_state=d_state, d_conv=d_conv, expand=expand,
-            residual_scale=residual_scale, p_drop=p_drop
+            d_state=d_state,
+            d_conv=d_conv,
+            expand=expand,
+            residual_scale=residual_scale,
+            p_drop=p_drop,
         )
 
-    def face_encoder(self, X: torch.Tensor) -> torch.Tensor:
-        return self.face(X)
+        # ↓ 这些是你实验开关；若暂不用，也可以先关掉避免干扰
+        self.use_aux_face_loss = use_aux_face_loss
+        self.residual_final = residual_final
+        self.grad_scale_s = float(grad_scale_s)
+        if self.use_aux_face_loss:
+            self.face_aux_head = nn.Linear(d_model, 3)
 
-    def patch_encoder(self, Fm: torch.Tensor) -> torch.Tensor:
-        return self.patch(Fm)
+        # 你原本的模块
+        self.face_encoder = FaceEncoder(
+            d_model=d_model,
+            depth=face_depth,
+            # ...
+        )
+        self.patch_encoder = PatchEncoder(
+            d_model=d_model,
+            depth=patch_depth,
+            # ...
+        )
 
+        # 新：一层的“法向初稿”头（d -> 3）
+        if self.use_aux_face_loss:
+            self.face_aux_head = nn.Linear(d_model, 3)
+
+        # 你原来可能还有的模块/参数初始化...
+
+    def _face_encode_chunked(self, X: torch.Tensor) -> torch.Tensor:
+        # ← 保持你原来的实现（按 M 分块等）
+        return self.face_encoder(X)
+
+    def forward(
+        self,
+        X: torch.Tensor,
+        patch_grad_s: float | None = None,   # 新：临时覆盖梯度比例
+        detach_patch: bool = False,          # 新：强制完全切断（等价 patch_grad_s=0）
+    ):
+        """
+        X: (B, M, N, 3)
+        返回：
+          - use_aux_face_loss=True : (n_hat, n1)    # 主输出 + 一层初稿（用于辅助损失）
+          - 否则            : n_hat
+        """
+        F_face = self._face_encode_chunked(X)    # (B, M, d)
+
+        # 一层初稿 n1（用于辅助监督 & 残差式最终输出）
+        if self.use_aux_face_loss:
+            n1 = F.normalize(self.face_aux_head(F_face), dim=-1, eps=1e-8)  # (B,M,3)
+        else:
+            # 若未开启辅助监督但 residual_final=True，也需要一个 n1；退化为零向量
+            n1 = torch.zeros((*F_face.shape[:2], 3), device=F_face.device, dtype=F_face.dtype)
+
+        # 控制二层梯度回流到一层的比例
+        s = 0.0 if detach_patch else (self.grad_scale_s if patch_grad_s is None else float(patch_grad_s))
+        F_for_patch = grad_scale(F_face, s)
+
+        # 二层输出（默认当作残差 Δ）
+        patch_out = self.patch_encoder(F_for_patch)   # (B,M,3)
+
+        if self.residual_final:
+            n_hat = F.normalize(n1 + patch_out, dim=-1, eps=1e-8)
+        else:
+            n_hat = F.normalize(patch_out, dim=-1, eps=1e-8)
+
+        return (n_hat, n1) if self.use_aux_face_loss else n_hat
+
+    # 可选：推理时只要主输出
     def pred(self, X: torch.Tensor) -> torch.Tensor:
-        Fm = self.face(X)
-        return self.patch(Fm)
-
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return self.pred(X)
+        out = self.forward(X)
+        return out[0] if isinstance(out, tuple) else out
