@@ -129,11 +129,15 @@ class PatchEncoder(nn.Module):
                  d_conv: int = 4,
                  expand: int = 2,
                  residual_scale: float = 0.5,
-                 p_drop: float = 0.05):
+                 p_drop: float = 0.05,
+                 in_dim: Optional[int] = None):
         super().__init__()
         self.M = M
         self.d_model = d_model
         self.pos_emb_patch = nn.Embedding(M, d_model) if add_patch_pos else None
+
+        self.in_dim = in_dim if in_dim is not None else d_model
+        self.in_proj = nn.Linear(self.in_dim, d_model) if self.in_dim != d_model else nn.Identity()
 
         self.layers = nn.ModuleList([
             MambaBlock(d_model, d_state=d_state, d_conv=d_conv, expand=expand,
@@ -146,7 +150,7 @@ class PatchEncoder(nn.Module):
     def forward(self, Fm: torch.Tensor) -> torch.Tensor:
         B, M, d = Fm.shape
         assert M == self.M, f"PatchEncoder: 期望 M={self.M}, 实得 {M}"
-        h = Fm
+        h = self.in_proj(Fm)
         if self.pos_emb_patch is not None:
             idx = torch.arange(M, device=Fm.device).unsqueeze(0).expand(B, M)
             h = h + self.pos_emb_patch(idx)
@@ -183,9 +187,9 @@ class TwoStageMamba(nn.Module):
         residual_scale: float = 0.5,
         p_drop: float = 0.05,
         # 以下是你实验特性（可保留）
-        use_aux_face_loss: bool = False,
-        residual_final: bool = False,
+        residual_final: bool = True,
         grad_scale_s: float = 0.0,
+        small_dim: int = 16,
     ):
         super().__init__()
         # 暴露给外部（S1 线性头读取）
@@ -206,6 +210,9 @@ class TwoStageMamba(nn.Module):
             residual_scale=residual_scale,
             p_drop=p_drop,
         )
+        self.face_small_proj = nn.Linear(d_model, small_dim)
+
+        in_dim = 3 + small_dim
         self.patch_encoder = PatchEncoder(
             M=self.M,
             d_model=d_model,
@@ -216,16 +223,16 @@ class TwoStageMamba(nn.Module):
             expand=expand,
             residual_scale=residual_scale,
             p_drop=p_drop,
+            in_dim=in_dim
         )
 
         # ↓ 这些是你实验开关；若暂不用，也可以先关掉避免干扰
-        self.use_aux_face_loss = use_aux_face_loss
         self.residual_final = residual_final
         self.grad_scale_s = float(grad_scale_s)
 
         # 新：一层的“法向初稿”头（d -> 3）
-        if self.use_aux_face_loss:
-            self.face_aux_head = nn.Linear(d_model, 3)
+
+        self.face_aux_head = nn.Linear(d_model, 3)
 
         # 你原来可能还有的模块/参数初始化...
 
@@ -242,31 +249,30 @@ class TwoStageMamba(nn.Module):
         """
         X: (B, M, N, 3)
         返回：
-          - use_aux_face_loss=True : (n_hat, n1)    # 主输出 + 一层初稿（用于辅助损失）
-          - 否则            : n_hat
+          - (n_hat, n1)    # 主输出 + 一层初稿（用于辅助损失）
         """
         F_face = self._face_encode_chunked(X)    # (B, M, d)
 
         # 一层初稿 n1（用于辅助监督 & 残差式最终输出）
-        if self.use_aux_face_loss:
-            n1 = F.normalize(self.face_aux_head(F_face), dim=-1, eps=1e-8)  # (B,M,3)
-        else:
-            # 若未开启辅助监督但 residual_final=True，也需要一个 n1；退化为零向量
-            n1 = torch.zeros((*F_face.shape[:2], 3), device=F_face.device, dtype=F_face.dtype)
+        n1 = F.normalize(self.face_aux_head(F_face), dim=-1, eps=1e-8)  # (B,M,3)
+
 
         # 控制二层梯度回流到一层的比例
         s = 0.0 if detach_patch else (self.grad_scale_s if patch_grad_s is None else float(patch_grad_s))
-        F_for_patch = grad_scale(F_face, s)
 
         # 二层输出（默认当作残差 Δ）
-        patch_out = self.patch_encoder(F_for_patch)   # (B,M,3)
+
+        f_small = self.face_small_proj(F_face)
+        z_in = torch.cat([n1, f_small], dim=-1)
+        z_in = grad_scale(z_in, s)
+        patch_out = self.patch_encoder(z_in)
 
         if self.residual_final:
             n_hat = F.normalize(n1 + patch_out, dim=-1, eps=1e-8)
         else:
             n_hat = F.normalize(patch_out, dim=-1, eps=1e-8)
 
-        return (n_hat, n1) if self.use_aux_face_loss else n_hat
+        return (n_hat, n1)
 
     # 可选：推理时只要主输出
     def pred(self, X: torch.Tensor) -> torch.Tensor:

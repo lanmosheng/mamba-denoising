@@ -9,6 +9,7 @@ import numpy as np
 # ----------------------------
 
 def _list_mesh_dirs(dataset_root: str) -> List[str]:
+    """Recursively collect subdirs that contain both lsd.npy and gt.npy."""
     mesh_dirs = []
     for root, dirs, files in os.walk(dataset_root):
         if 'lsd.npy' in files and 'gt.npy' in files:
@@ -45,54 +46,6 @@ def _resolve_patch_path(mesh_dir: str, patch_root: Optional[str] = None) -> str:
     raise FileNotFoundError(f"patch_faces.npy not found for mesh '{mesh_name}' under patch_root='{patch_root}'")
 
 
-def _safe_norm(v: np.ndarray, eps: float = 1e-8) -> float:
-    """Return max(||v||, eps) as a *lower-bounded* norm for stable normalization."""
-    n = float(np.linalg.norm(v))
-    return n if n > eps else eps
-
-
-def _rotation_matrix_from_a_to_b(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> np.ndarray:
-    """Return 3x3 rotation matrix that rotates vector a to b."""
-    a = np.asarray(a, dtype=np.float64)
-    b = np.asarray(b, dtype=np.float64)
-    an = a / _safe_norm(a, eps)
-    bn = b / _safe_norm(b, eps)
-
-    v = np.cross(an, bn)       # rotation axis * sin(theta)
-    c = float(np.dot(an, bn))  # cos(theta)
-    s = float(np.linalg.norm(v))  # |sin(theta)| -- use *true* norm for branch
-
-    if s < 1e-12:
-        if c > 0.0:  # parallel
-            return np.eye(3, dtype=np.float64)
-        # opposite: 180° rotate around any orthogonal axis
-        axis = np.array([1.0, 0.0, 0.0], dtype=np.float64)
-        if abs(an[0]) > 0.9:
-            axis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
-        axis = axis / _safe_norm(axis, eps)
-        # Rodrigues for 180°: R = I + 2*K^2 with s=0, c=-1  (since sin=0, 1-c = 2)
-        K = np.array([[0, -axis[2], axis[1]],
-                      [axis[2], 0, -axis[0]],
-                      [-axis[1], axis[0], 0]], dtype=np.float64)
-        return np.eye(3, dtype=np.float64) + 2.0 * (K @ K)
-
-    axis = v / s
-    K = np.array([[0, -axis[2], axis[1]],
-                  [axis[2], 0, -axis[0]],
-                  [-axis[1], axis[0], 0]], dtype=np.float64)
-    # Rodrigues: R = I + K*sin + K^2*(1-cos)
-    R = np.eye(3, dtype=np.float64) + K * s + (K @ K) * (1.0 - c)
-    return R
-
-
-def _zscore_patch(X: np.ndarray, eps: float = 1e-6) -> np.ndarray:
-    """Patch-level z-score over (M*N) jointly per channel of last dim=3. X: (M, N, 3)"""
-    flat = X.reshape(-1, 3)
-    mu = flat.mean(axis=0)
-    std = flat.std(axis=0)
-    std = np.maximum(std, eps)
-    return (X - mu) / std
-
 # ----------------------------
 # Loader
 # ----------------------------
@@ -107,11 +60,13 @@ class Loader:
     - sampling_size = lsd_r_size * lsd_t_size + 1
     - 每个 mesh 以“一个中心面=一个样本（其 patch）”展开
     - 支持 **稀疏 patch**：patch_faces.npy 只存被选中的 K 个中心 → 形状 (K, M)
-    - generate_batch 返回：
+
+    - 本 Loader **不做旋转与标准化**（已迁至 Trainer）。
+    - 返回（默认）：
         data:  (num_batches, B, M, N, 3)
         label: (num_batches, B, M, 3)
-    - 返回前做 patch 级 z-score + patch-wise 旋转到 (1,0,0)
-      （旋转锚点来自 LSD 的可观测信息，不依赖 GT）
+      若 `return_face_idx=True`，额外返回：
+        face_idx: (num_batches, B, M)  每个 (B,M) 位置对应的全局面号
     """
     def __init__(self,
                  dataset_root: str,
@@ -120,9 +75,8 @@ class Loader:
                  patch_root: Optional[str] = None,
                  drop_last: bool = True,
                  shuffle_faces: bool = False,
-                 mmap: bool = True,
-                 rotation_anchor: str = 'center',  # 'center' or 'mean'
-                 eps: float = 1e-6):
+                 mmap: bool = True,             # 兼容保留，Loader 内部不使用
+                 return_face_idx: bool = False):   # ☆ 新增：是否返回 (B,M) 的面号
         self.dataset_root = dataset_root
         self.patch_root = patch_root
         if self.patch_root is None:
@@ -131,8 +85,9 @@ class Loader:
         self.drop_last = bool(drop_last)
         self.shuffle_faces = bool(shuffle_faces)
         self.mmap_mode = 'r' if mmap else None
-        self.rotation_anchor = rotation_anchor
-        self.eps = eps
+
+        # 新增
+        self.return_face_idx = bool(return_face_idx)
 
         meta_path = meta_path or _default_meta_path(dataset_root)
         self.meta = _load_meta(meta_path)
@@ -202,7 +157,12 @@ class Loader:
     # batch APIs
     # ----------------------------
     def generate_batch(self, mesh_idx: int, sampling_size: Optional[int] = None):
-        """Load an entire mesh into numpy batches: returns (data_batches, label_batches)."""
+        """Load an entire mesh into numpy batches:
+        Returns:
+            data:  (num_batches, B, M, N, 3)
+            label: (num_batches, B, M, 3)
+            [face_idx: (num_batches, B, M)]  if return_face_idx=True
+        """
         if sampling_size is not None and sampling_size != self.sampling_size:
             raise ValueError(f"sampling_size mismatch: got {sampling_size}, meta says {self.sampling_size}")
 
@@ -225,8 +185,7 @@ class Loader:
 
         batches_X: List[np.ndarray] = []
         batches_Y: List[np.ndarray] = []
-
-        target = np.array([1.0, 0.0, 0.0], dtype=np.float64)  # +X
+        batches_I: List[np.ndarray] = [] if self.return_face_idx else None
 
         for bi in range(num_batches):
             start = bi * B
@@ -238,59 +197,46 @@ class Loader:
 
             Xb = np.empty((cur_B, self.patch_num, self.sampling_size, 3), dtype=np.float32)
             Yb = np.empty((cur_B, self.patch_num, 3), dtype=np.float32)
+            if self.return_face_idx:
+                Ib = np.empty((cur_B, self.patch_num), dtype=np.int64)
 
             for i, c in enumerate(cur_centers):
                 faces = patch_faces[c]            # (M,)
                 X = lsd[faces]                    # (M,N,3)
                 Y = gt[faces]                     # (M,3)
 
-                # anchor selection (use OBSERVABLE LSD, not GT)
-                centers = X[:, 0, :]  # (M,3) center sample per face
-                if self.rotation_anchor == 'center':
-                    anchor = centers[0]
-                else:  # 'mean'
-                    norms = np.linalg.norm(centers, axis=1, keepdims=True)
-                    valid = (norms > self.eps).squeeze(1)
-                    if valid.any():
-                        anchor = (centers[valid] / np.maximum(norms[valid], self.eps)).mean(axis=0)
-                    else:
-                        anchor = centers.mean(axis=0)
-
-                # degenerate fallback: if invalid/near-zero, fall back to robust mean, then +X
-                if (not np.isfinite(anchor).all()) or (np.linalg.norm(anchor) < 1e-6):
-                    flat = X.reshape(-1, 3)
-                    mask = np.isfinite(flat).all(axis=1)
-                    anchor = (flat[mask].mean(axis=0) if mask.any()
-                              else np.array([1.0, 0.0, 0.0], dtype=np.float64))
-
-                R = _rotation_matrix_from_a_to_b(anchor, target, eps=self.eps)
-
-                # rotate
-                X_rot = X.reshape(-1, 3) @ R.T
-                X_rot = X_rot.reshape(self.patch_num, self.sampling_size, 3)
-                Y_rot = Y @ R.T
-
-                # patch-level z-score
-                Xn = _zscore_patch(X_rot, eps=self.eps)
-
-                Xb[i] = Xn.astype(np.float32)
-                Yb[i] = Y_rot.astype(np.float32)
+                Xb[i] = X.astype(np.float32)
+                Yb[i] = Y.astype(np.float32)
+                if self.return_face_idx:
+                    Ib[i] = faces.astype(np.int64)
 
             batches_X.append(Xb)
             batches_Y.append(Yb)
+            if self.return_face_idx:
+                batches_I.append(Ib)
 
         if not batches_X:
-            return (
-                np.empty((0, self.batch_size, self.patch_num, self.sampling_size, 3), dtype=np.float32),
-                np.empty((0, self.batch_size, self.patch_num, 3), dtype=np.float32),
-            )
+            empty_X = np.empty((0, self.batch_size, self.patch_num, self.sampling_size, 3), dtype=np.float32)
+            empty_Y = np.empty((0, self.batch_size, self.patch_num, 3), dtype=np.float32)
+            if self.return_face_idx:
+                empty_I = np.empty((0, self.batch_size, self.patch_num), dtype=np.int64)
+                return empty_X, empty_Y, empty_I
+            return empty_X, empty_Y
 
         data  = np.stack(batches_X, axis=0)
         label = np.stack(batches_Y, axis=0)
+        if self.return_face_idx:
+            face_idx = np.stack(batches_I, axis=0)
+            return data, label, face_idx
         return data, label
 
     def iter_batches(self, mesh_idx: int, sampling_size: int | None = None):
-        """Yield small batches for a mesh (streaming). Shape same as generate_batch per item."""
+        """Yield small batches for a mesh (streaming).
+        Yields:
+            Xb: (B, M, N, 3)
+            Yb: (B, M, 3)
+            [Ib: (B, M)] if return_face_idx=True
+        """
         if sampling_size is not None and sampling_size != self.sampling_size:
             raise ValueError(f"sampling_size mismatch: got {sampling_size}, meta says {self.sampling_size}")
 
@@ -309,8 +255,6 @@ class Loader:
         total = len(center_idx)
         num_batches = total // B + (0 if self.drop_last or total % B == 0 else 1)
 
-        target = np.array([1.0, 0.0, 0.0], dtype=np.float64)
-
         for bi in range(num_batches):
             start = bi * B
             end = min(start + B, total)
@@ -321,43 +265,23 @@ class Loader:
 
             Xb = np.empty((cur_B, self.patch_num, self.sampling_size, 3), dtype=np.float32)
             Yb = np.empty((cur_B, self.patch_num, 3), dtype=np.float32)
+            if self.return_face_idx:
+                Ib = np.empty((cur_B, self.patch_num), dtype=np.int64)
 
             for i, c in enumerate(cur_centers):
                 faces = patch_faces[c]                # (M,)
                 X = lsd[faces]                        # (M,N,3)
                 Y = gt[faces]                         # (M,3)
 
-                # anchor selection (use OBSERVABLE LSD, not GT)
-                centers = X[:, 0, :]  # (M,3)
-                if self.rotation_anchor == 'center':
-                    anchor = centers[0]
-                else:
-                    norms = np.linalg.norm(centers, axis=1, keepdims=True)
-                    valid = (norms > self.eps).squeeze(1)
-                    if valid.any():
-                        anchor = (centers[valid] / np.maximum(norms[valid], self.eps)).mean(axis=0)
-                    else:
-                        anchor = centers.mean(axis=0)
+                Xb[i] = X.astype(np.float32)
+                Yb[i] = Y.astype(np.float32)
+                if self.return_face_idx:
+                    Ib[i] = faces.astype(np.int64)
 
-                if (not np.isfinite(anchor).all()) or (np.linalg.norm(anchor) < 1e-6):
-                    flat = X.reshape(-1, 3)
-                    mask = np.isfinite(flat).all(axis=1)
-                    anchor = (flat[mask].mean(axis=0) if mask.any()
-                              else np.array([1.0, 0.0, 0.0], dtype=np.float64))
-
-                R = _rotation_matrix_from_a_to_b(anchor, target, eps=self.eps)
-
-                X_rot = X.reshape(-1, 3) @ R.T
-                X_rot = X_rot.reshape(self.patch_num, self.sampling_size, 3)
-                Y_rot = Y @ R.T
-
-                Xn = _zscore_patch(X_rot, eps=self.eps)
-
-                Xb[i] = Xn.astype(np.float32)
-                Yb[i] = Y_rot.astype(np.float32)
-
-            # stream out
-            yield Xb, Yb
+            if self.return_face_idx:
+                yield Xb, Yb, Ib
+            else:
+                yield Xb, Yb
 
     def count_batches(self, mesh_idx: int) -> int:
         """Return number of batches for this mesh, honoring sparse patch_faces and drop_last."""

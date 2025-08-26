@@ -2,7 +2,7 @@
 import os
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0,1")
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128")
-
+import torch.nn.functional as F
 import time
 import contextlib
 import torch
@@ -26,14 +26,15 @@ PATCH_ROOT         = "patches"
 META_TRAIN         = os.path.join(DATASET_ROOT_TRAIN, "meta.json")
 META_DEV           = os.path.join(DATASET_ROOT_DEV,   "meta.json")
 
+OUT_NAME = "face_agg"
 # =======================================================
 # 运行开关 & 恢复设置
 # =======================================================
-RUN_S1 = False                   # 是否执行 S1（只训 Face-Encoder + 线性头）
+RUN_S1 = True                   # 是否执行 S1（只训 Face-Encoder + 线性头）
 RUN_S2 = True                   # 是否执行 S2（只训 Patch-Encoder）
 
-RESUME_S1 = True                # 是否尝试从 stage1_latest.pt 恢复（含优化器/调度器）
-RESUME_S2 = True                # 是否尝试从 stage2_latest.pt 恢复（含优化器/调度器）
+RESUME_S1 = False                # 是否尝试从 stage1_latest.pt 恢复（含优化器/调度器）
+RESUME_S2 = False                # 是否尝试从 stage2_latest.pt 恢复（含优化器/调度器）
 
 # 当 S2 无法从 latest 恢复时，是否在开始前加载 S1 的 best 权重
 LOAD_S1_BEST_BEFORE_S2 = True
@@ -42,9 +43,9 @@ LOAD_S1_BEST_BEFORE_S2 = True
 # Scheduler & Early Stop（两阶段可独立配置）
 # =======================================================
 # —— S1 ——
-S1_EPOCHS      = 10
+S1_EPOCHS      = 15
 S1_BATCH_SIZE  = 8
-S1_LR          = 1e-4
+S1_LR          = 8e-4
 USE_LR_SCHED_S1        = True      # 启用 ReduceLROnPlateau
 USE_EARLY_STOP_S1      = True      # 启用早停
 S1_SCHED_FACTOR        = 0.5
@@ -53,9 +54,9 @@ S1_MIN_LR              = 1e-6
 S1_EARLY_STOP_PATIENCE = 3
 
 # —— S2 ——
-S2_EPOCHS      = 20
+S2_EPOCHS      = 15
 S2_BATCH_SIZE  = 8
-S2_LR          = 1e-4
+S2_LR          = 5e-5
 USE_LR_SCHED_S2        = True
 USE_EARLY_STOP_S2      = True
 S2_SCHED_FACTOR        = 0.5
@@ -71,7 +72,6 @@ IMPROVE_DELTA         = 2e-6
 # =======================================================
 SHUFFLE_TRAIN  = True
 DROP_LAST      = True
-LOG_CENTER_ONLY_ANGLE = False  # 如需打印 center-only 角度，设 True
 
 # =======================================================
 # 日志/输出（支持固定目录 / 环境变量覆盖 / 追加日志）
@@ -79,7 +79,7 @@ LOG_CENTER_ONLY_ANGLE = False  # 如需打印 center-only 角度，设 True
 # 如果你想复用同一个目录（便于 resume），把 USE_FIXED_OUT_DIR 设为 True 并设置 FIXED_OUT_DIR；
 # 也可以通过环境变量 OUT_DIR 覆盖（优先级更高）。
 USE_FIXED_OUT_DIR = True
-FIXED_OUT_DIR     = os.path.join('out', 'two_stage_1001')  # 自行修改为你的固定实验目录
+FIXED_OUT_DIR     = os.path.join('out', OUT_NAME)  # 自行修改为你的固定实验目录
 APPEND_LOGS       = True  # 复用目录时追加日志而不是覆盖
 
 OUT_DIR_ENV = os.getenv('OUT_DIR')
@@ -115,7 +115,7 @@ train_loader_s1 = Loader(
     drop_last=DROP_LAST,
     shuffle_faces=SHUFFLE_TRAIN,
     mmap=True,
-    rotation_anchor='center',
+    return_face_idx=True
 )
 
 dev_loader_s1 = Loader(
@@ -126,7 +126,7 @@ dev_loader_s1 = Loader(
     drop_last=True,
     shuffle_faces=False,
     mmap=True,
-    rotation_anchor='center',
+    return_face_idx=True
 )
 
 train_loader_s2 = Loader(
@@ -137,7 +137,7 @@ train_loader_s2 = Loader(
     drop_last=DROP_LAST,
     shuffle_faces=SHUFFLE_TRAIN,
     mmap=True,
-    rotation_anchor='center',
+    return_face_idx=True
 )
 
 dev_loader_s2 = Loader(
@@ -148,7 +148,7 @@ dev_loader_s2 = Loader(
     drop_last=True,
     shuffle_faces=False,
     mmap=True,
-    rotation_anchor='center',
+    return_face_idx=True
 )
 
 # 形状信息
@@ -180,10 +180,9 @@ class Stage1FaceOnly(nn.Module):
         d_guess = getattr(self.base, 'd_model', None)
         if d_guess is None:
             d_guess = getattr(getattr(self.base, 'face', object()), 'd_model', 64)
-        self.face_head = nn.Linear(int(d_guess), 3)
     def forward(self, X, **kwargs):
         F = self.base.face_encoder(X)              # (B,M,d)
-        y = self.face_head(F)                      # (B,M,3)
+        y = self.base.face_aux_head(F)                      # (B,M,3)
         return torch.nn.functional.normalize(y, dim=-1, eps=1e-8)
 
 class Stage2PatchOnly(nn.Module):
@@ -195,8 +194,24 @@ class Stage2PatchOnly(nn.Module):
     def forward(self, X, **kwargs):
         ctx = torch.no_grad() if self.freeze_face else contextlib.nullcontext()
         with ctx:
-            F = self.base.face_encoder(X)          # (B,M,d)
-        y = self.base.patch_encoder(F)             # (B,M,3)
+            F_face = self.base.face_encoder(X)                                 # (B,M,d)
+            n1 = F.normalize(self.base.face_aux_head(F_face), dim=-1, eps=1e-8)  # (B,M,3)
+            f_small = self.base.face_small_proj(F_face)                        # (B,M,k)
+            use_kappa = bool(getattr(self.base, "use_kappa", False)) and hasattr(self.base, "face_kappa_head")
+            if use_kappa:
+                kappa = torch.sigmoid(self.base.face_kappa_head(F_face))       # (B,M,1)
+
+        # 二层输入：n1 ⊕ f_small [⊕ κ]
+        z_in = torch.cat([n1, f_small, kappa] if use_kappa else [n1, f_small], dim=-1)
+
+        # 二层输出视作 Δ；PatchEncoder 内部会 in_proj→Mamba 堆栈
+        delta = self.base.patch_encoder(z_in)                                  # (B,M,3)
+
+        # 残差细化：n̂ = normalize(n1 + Δ)（若 residual_final=False，则直接用 Δ）
+        if bool(getattr(self.base, "residual_final", True)):
+            y = F.normalize(n1 + delta, dim=-1, eps=1e-8)
+        else:
+            y = delta
         return y
 
 # =======================================================
@@ -247,9 +262,9 @@ def run_stage1():
             total_batches = train_loader_s1.count_batches(mi)
             pbar = tqdm(total=total_batches, desc=f"[S1] Epoch {epoch} | mesh {mi}", leave=False)
             mesh_loss_sum, mesh_cnt = 0.0, 0
-            for Xb, Yb in train_loader_s1.iter_batches(mi, sampling_size):
+            for Xb, Yb, Ib in train_loader_s1.iter_batches(mi, sampling_size):
                 B_cur = Xb.shape[0]
-                loss = trainer1.train_step(Xb, Yb)
+                loss = trainer1.train_step(Xb, Yb, face_idx=Ib)
                 mesh_loss_sum += float(loss) * B_cur
                 mesh_cnt      += B_cur
                 pbar.update(1)
@@ -260,8 +275,8 @@ def run_stage1():
                 logger.add_scalar('stage1/train_loss_mesh', mesh_avg, epoch)
 
         # —— 验证 ——
-        val_loss = trainer1.evaluate(dev_loader_s1, sampling_size)
-        val_ang  = trainer1.evaluate_angle(dev_loader_s1, sampling_size, center_only=False)
+        val_ang  = trainer1.evaluate_angle_faceagg(dev_loader_s1, sampling_size)
+        val_loss = val_ang
 
         # —— 调度（先 step，再观察 LR 变化）——
         prev_lr = get_lr(opt1)
@@ -272,13 +287,9 @@ def run_stage1():
             log_print(f"[S1] LR reduced: {prev_lr:.6g} -> {new_lr:.6g} (patience hit)")
 
         # —— 日志 ——
-        log_line = f"[S1] lr={get_lr(opt1):.6g} | val_mse: {val_loss:.6f} | angle_all: {val_ang:.3f}°"
-        if LOG_CENTER_ONLY_ANGLE:
-            val_ctr = trainer1.evaluate_angle(dev_loader_s1, sampling_size, center_only=True)
-            log_line += f" | angle_center: {val_ctr:.3f}°"
+        log_line = f"[S1] lr={get_lr(opt1):.6g} | val_angle_deg: {val_ang:.3f}°"
         log_print(log_line)
 
-        logger.add_scalar('stage1/val_loss', val_loss, epoch)
         logger.add_scalar('stage1/val_angle_deg', val_ang, epoch)
 
         # —— 保存 latest/best + 早停 ——
@@ -358,9 +369,9 @@ def run_stage2(resume_first=True):
             total_batches = train_loader_s2.count_batches(mi)
             pbar = tqdm(total=total_batches, desc=f"[S2] Epoch {epoch} | mesh {mi}", leave=False)
             mesh_loss_sum, mesh_cnt = 0.0, 0
-            for Xb, Yb in train_loader_s2.iter_batches(mi, sampling_size):
+            for Xb, Yb, Ib in train_loader_s2.iter_batches(mi, sampling_size):
                 B_cur = Xb.shape[0]
-                loss = trainer2.train_step(Xb, Yb)
+                loss = trainer2.train_step(Xb, Yb, face_idx=Ib)
                 mesh_loss_sum += float(loss) * B_cur
                 mesh_cnt      += B_cur
                 pbar.update(1)
@@ -371,8 +382,8 @@ def run_stage2(resume_first=True):
                 logger.add_scalar('stage2/train_loss_mesh', mesh_avg, epoch)
 
         # —— 验证 ——
-        val_loss = trainer2.evaluate(dev_loader_s2, sampling_size)
-        val_ang  = trainer2.evaluate_angle(dev_loader_s2, sampling_size, center_only=False)
+        val_ang  = trainer2.evaluate_angle_faceagg(dev_loader_s2, sampling_size)
+        val_loss = val_ang
 
         # —— 调度（先 step，再观察 LR 变化）——
         prev_lr = get_lr(opt2)
@@ -383,13 +394,9 @@ def run_stage2(resume_first=True):
             log_print(f"[S2] LR reduced: {prev_lr:.6g} -> {new_lr:.6g} (patience hit)")
 
         # —— 日志 ——
-        log_line = f"[S2] lr={get_lr(opt2):.6g} | val_mse: {val_loss:.6f} | angle_all: {val_ang:.3f}°"
-        if LOG_CENTER_ONLY_ANGLE:
-            val_ctr = trainer2.evaluate_angle(dev_loader_s2, sampling_size, center_only=True)
-            log_line += f" | angle_center: {val_ctr:.3f}°"
+        log_line = f"[S2] lr={get_lr(opt2):.6g} | val_angle_deg: {val_ang:.3f}°"
         log_print(log_line)
 
-        logger.add_scalar('stage2/val_loss', val_loss, epoch)
         logger.add_scalar('stage2/val_angle_deg', val_ang, epoch)
 
         # —— 保存 latest/best + 早停 ——
