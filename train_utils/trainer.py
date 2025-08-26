@@ -2,6 +2,7 @@
 import math
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 class Trainer:
     def __init__(self, model, optimizer, logger=None, cfg=None, device='cuda'):
