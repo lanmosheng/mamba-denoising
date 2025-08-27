@@ -11,6 +11,7 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
+from types import SimpleNamespace
 
 from train_utils.fileloader import Loader
 from train_utils.checkpoints import CheckpointIO
@@ -81,6 +82,24 @@ DROP_LAST      = True
 USE_FIXED_OUT_DIR = True
 FIXED_OUT_DIR     = os.path.join('out', OUT_NAME)  # 自行修改为你的固定实验目录
 APPEND_LOGS       = True  # 复用目录时追加日志而不是覆盖
+
+# ===== Trainer 显式配置（S1 / S2） =====
+cfg1 = SimpleNamespace(
+    aux_face_weight=0.3,   # 辅助头损失权重：总损失 = 主损失 + aux_face_weight * 辅助头损失（值越大越重视 n1 的监督）
+    patch_detach=True,     # 是否切断到二层（patch-encoder）的梯度：True=完全不回流，二层不更新
+    patch_grad_scale=0.0,  # （仅在未切断时生效）回流到二层/一层的梯度缩放系数：0.0=不回流，0.1=温和回流
+    eps=1e-6,              # 数值稳定用的小常数：用于除以范数、clamp/acos 等避免 NaN/Inf
+)
+
+# S2 配置（只训二层 patch；face 冻结由 Stage2PatchOnly 控制）
+cfg2 = SimpleNamespace(
+    aux_face_weight=0.1,   # 辅助头损失权重：仍计算 n1 的辅助损失，数值越大对 n1 一致性约束越强
+    patch_detach=False,    # 不切断：允许从最终损失反传到二层（但 S2 前向里 face 已 no_grad，不会更新一层）
+    patch_grad_scale=0.0,  # （未切断时可用）梯度缩放：0.0=不回流到上一层；也可试 0.1 做温和联动
+    eps=1e-6,              # 数值稳定常数：同上
+)
+# ======================================
+
 
 OUT_DIR_ENV = os.getenv('OUT_DIR')
 if OUT_DIR_ENV and len(OUT_DIR_ENV.strip()) > 0:
@@ -239,7 +258,7 @@ def run_stage1():
         sched1 = ReduceLROnPlateau(opt1, mode='min', factor=S1_SCHED_FACTOR,
                                    patience=S1_SCHED_PATIENCE, min_lr=S1_MIN_LR)
 
-    trainer1 = Trainer(stage1, opt1, device=device)
+    trainer1 = Trainer(stage1, opt1, logger=logger, device=device, cfg=cfg1)
     ckpt1 = CheckpointIO(out_dir, model=stage1, optimizer=opt1, scheduler=sched1)
 
     # ===== 恢复（latest） =====
@@ -335,7 +354,7 @@ def run_stage2(resume_first=True):
         sched2 = ReduceLROnPlateau(opt2, mode='min', factor=S2_SCHED_FACTOR,
                                    patience=S2_SCHED_PATIENCE, min_lr=S2_MIN_LR)
 
-    trainer2 = Trainer(stage2, opt2, device=device)
+    trainer2 = Trainer(stage2, opt2, logger=logger, device=device, cfg=cfg2)
     ckpt2 = CheckpointIO(out_dir, model=stage2, optimizer=opt2, scheduler=sched2)
 
     # ===== 优先尝试恢复（latest） =====
