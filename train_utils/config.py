@@ -13,7 +13,7 @@ def get_model(
     d_model: int = 64,
     face_depth: int = 4,
     patch_depth: int = 4,
-    add_pos_emb: bool = True,     # LSD token（N维序列）的极坐标位置编码
+    add_pos_emb: bool = False,     # LSD token（N维序列）的极坐标位置编码
     add_patch_pos: bool = False,  # patch 内位置编码（可选）
     d_state: int = 16,
     d_conv: int = 4,

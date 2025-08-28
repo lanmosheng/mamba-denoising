@@ -31,12 +31,13 @@ OUT_NAME = "face_agg"
 # =======================================================
 # 运行开关 & 恢复设置
 # =======================================================
-RUN_S1 = True                   # 是否执行 S1（只训 Face-Encoder + 线性头）
-RUN_S2 = True                   # 是否执行 S2（只训 Patch-Encoder）
+RUN_S1 = False                   # 是否执行 S1（只训 Face-Encoder + 线性头）
+RUN_S2 = False                   # 是否执行 S2（只训 Patch-Encoder）
+RUN_S3 = True
 
-RESUME_S1 = False                # 是否尝试从 stage1_latest.pt 恢复（含优化器/调度器）
-RESUME_S2 = False                # 是否尝试从 stage2_latest.pt 恢复（含优化器/调度器）
-
+RESUME_S1 = True                # 是否尝试从 stage1_latest.pt 恢复（含优化器/调度器）
+RESUME_S2 = True                # 是否尝试从 stage2_latest.pt 恢复（含优化器/调度器）
+RESUME_S3 = True
 # 当 S2 无法从 latest 恢复时，是否在开始前加载 S1 的 best 权重
 LOAD_S1_BEST_BEFORE_S2 = True
 
@@ -44,9 +45,9 @@ LOAD_S1_BEST_BEFORE_S2 = True
 # Scheduler & Early Stop（两阶段可独立配置）
 # =======================================================
 # —— S1 ——
-S1_EPOCHS      = 15
+S1_EPOCHS      = 3
 S1_BATCH_SIZE  = 8
-S1_LR          = 8e-4
+S1_LR          = 1e-3
 USE_LR_SCHED_S1        = True      # 启用 ReduceLROnPlateau
 USE_EARLY_STOP_S1      = True      # 启用早停
 S1_SCHED_FACTOR        = 0.5
@@ -55,15 +56,26 @@ S1_MIN_LR              = 1e-6
 S1_EARLY_STOP_PATIENCE = 3
 
 # —— S2 ——
-S2_EPOCHS      = 15
+S2_EPOCHS      = 5
 S2_BATCH_SIZE  = 8
-S2_LR          = 5e-5
+S2_LR          = 1e-4
 USE_LR_SCHED_S2        = True
 USE_EARLY_STOP_S2      = True
 S2_SCHED_FACTOR        = 0.5
 S2_SCHED_PATIENCE      = 2
 S2_MIN_LR              = 1e-6
 S2_EARLY_STOP_PATIENCE = 5   # 放宽，避免与调度器撞车
+
+# —— S3 ——
+S3_EPOCHS = 15               # 先跑 5~10 个 epoch 观察平台
+S3_LR_PATCH = 1.0e-4         # 二层步子大一些
+S3_LR_FACE  = 3.0e-5         # 一层步子小一些（patch 的 ~0.3x）
+S3_WEIGHT_DECAY = 1e-2
+S3_PLATEAU_PATIENCE = 4      # 进入平台就降 LR
+S3_IMPROVE_DELTA = 1e-3      # 角度改善阈值（度）
+S3_MIN_LR = 1e-6
+S3_SCHED_FACTOR = 0.5
+S3_SCHED_PATIENCE = 4
 
 # 早停与“有提升”的容差
 IMPROVE_DELTA         = 2e-6
@@ -97,6 +109,14 @@ cfg2 = SimpleNamespace(
     patch_detach=False,    # 不切断：允许从最终损失反传到二层（但 S2 前向里 face 已 no_grad，不会更新一层）
     patch_grad_scale=0.0,  # （未切断时可用）梯度缩放：0.0=不回流到上一层；也可试 0.1 做温和联动
     eps=1e-6,              # 数值稳定常数：同上
+)
+
+# S3 配置
+cfg3 = SimpleNamespace(
+    aux_face_weight=0.1,   # 主+辅损失，建议 0.1 或 0.2
+    patch_detach=False,    # ☆ 联合：不截断
+    patch_grad_scale=0.1,  # ☆ 允许少量回流到一层（0.05~0.3 均可）
+    eps=1e-6,
 )
 # ======================================
 
@@ -233,6 +253,62 @@ class Stage2PatchOnly(nn.Module):
             y = delta
         return y
 
+def _load_s1s2_best_into_base(model_or_dp, out_dir: str):
+    """
+    将 S1/S2 的 best 权重部分加载到 TwoStageMamba base 上：
+      - S1 best -> face_encoder.*, face_aux_head.*
+      - S2 best -> patch_encoder.*
+    支持 DataParallel 包装（会自动拿 .module）。
+    """
+    mdl = model_or_dp.module if isinstance(model_or_dp, nn.DataParallel) else model_or_dp
+    base_sd = mdl.state_dict()
+    loaded_info = []
+
+    def _safe_load(path):
+        if not os.path.exists(path):
+            return None
+        obj = torch.load(path, map_location='cpu')
+        sd = obj.get('model', obj)  # 兼容 CheckpointIO / torch.save
+        # ☆ 统一去掉 DataParallel 的 'module.' 前缀
+        sd = { (k[7:] if k.startswith('module.') else k): v for k, v in sd.items() }
+        return sd
+
+    # —— S1 best：face_* —— 
+    sd1 = _safe_load(os.path.join(out_dir, 'stage1_best.pt'))
+    if sd1 is not None:
+        # 兼容可能的名前缀（有些 ckpt 是 'base.face_encoder.'，有些是直接 'face_encoder.'）
+        maps = [('base.face_encoder.', 'face_encoder.'),
+                ('face_encoder.', 'face_encoder.'),
+                ('base.face_aux_head.', 'face_aux_head.'),
+                ('face_aux_head.', 'face_aux_head.')]
+        cnt = 0
+        for k_from, k_to in maps:
+            part = {k.replace(k_from, k_to): v
+                    for k, v in sd1.items()
+                    if k.startswith(k_from) and (k.replace(k_from, k_to) in base_sd)}
+            base_sd.update(part); cnt += len(part)
+        if cnt:
+            loaded_info.append(f"S1(face)={cnt}")
+
+    # —— S2 best：patch_* —— 
+    sd2 = _safe_load(os.path.join(out_dir, 'stage2_best.pt'))
+    if sd2 is not None:
+        maps = [('base.patch_encoder.', 'patch_encoder.'),
+                ('patch_encoder.', 'patch_encoder.'),
+                ('base.face_small_proj.', 'face_small_proj.'),  # ☆ 新增这一行
+                ('face_small_proj.',      'face_small_proj.'),  
+                ]
+        cnt = 0
+        for k_from, k_to in maps:
+            part = {k.replace(k_from, k_to): v
+                    for k, v in sd2.items()
+                    if k.startswith(k_from) and (k.replace(k_from, k_to) in base_sd)}
+            base_sd.update(part); cnt += len(part)
+        if cnt:
+            loaded_info.append(f"S2(patch)={cnt}")
+
+    mdl.load_state_dict(base_sd, strict=False)
+    return ', '.join(loaded_info) if loaded_info else 'none'
 # =======================================================
 # S1：只训 Face + 线性头
 # =======================================================
@@ -436,6 +512,105 @@ def run_stage2(resume_first=True):
 
     return stage2, best_val
 
+def run_stage3(resume_first=True):
+    # —— 联合微调：Face + Patch 都参与训练 ——
+    for p in base.parameters():
+        p.requires_grad = True
+
+    # 1) 包装模型（多卡）
+    model3 = base.to(device)
+    if torch.cuda.device_count() >= 2:
+        model3 = nn.DataParallel(model3, device_ids=list(range(torch.cuda.device_count())))
+        log_print(f"[S3] Using GPUs: {model3.device_ids}")
+
+    # 2) 参数分组（与 S2 风格一致：从“被包裹后的”module 取参数）
+    mdl = model3.module if isinstance(model3, nn.DataParallel) else model3
+    face_params  = []
+    patch_params = []
+    face_params += list(mdl.face_encoder.parameters())
+    face_params += list(mdl.face_small_proj.parameters())
+    face_params += list(mdl.face_aux_head.parameters())
+    patch_params += list(mdl.patch_encoder.parameters())
+
+    opt3 = torch.optim.AdamW(
+        [
+            {"params": patch_params, "lr": S3_LR_PATCH},
+            {"params": face_params,  "lr": S3_LR_FACE},
+        ],
+        weight_decay=S3_WEIGHT_DECAY
+    )
+    sched3 = ReduceLROnPlateau(
+        opt3, mode='min', factor=S3_SCHED_FACTOR,
+        patience=S3_SCHED_PATIENCE, min_lr=S3_MIN_LR
+    )
+
+    trainer3 = Trainer(model3, opt3, logger=logger, cfg=cfg3, device=device)
+    ckpt3 = CheckpointIO(out_dir, model=model3, optimizer=opt3, scheduler=sched3)
+
+    # 3) 恢复
+    start_epoch = 0
+    if RESUME_S3 and resume_first:
+        try:
+            scalars = ckpt3.load('stage3_latest.pt')
+            start_epoch = int(scalars.get('epoch_it', -1)) + 1
+            log_print(f"[S3] Resume from epoch {start_epoch}")
+        except Exception as e:
+            log_print(f"[S3] Resume skipped ({e})")
+            info = _load_s1s2_best_into_base(model3, out_dir)
+            log_print(f"[S3] Init from S1_best + S2_best: {info}")
+
+    best_val, no_improve = float('inf'), 0
+
+    # val0 = trainer3.evaluate_angle_faceagg(dev_loader_s2, sampling_size)
+    # log_print(f"[S3] sanity before training, val_angle_deg: {val0:.3f}°")
+
+    # 4) 训练循环（沿用 S2 的口径）
+    log_print("==== Stage 3: Joint Finetune (Face + Patch) ====")
+    for epoch in range(start_epoch, S3_EPOCHS):
+        # —— Train ——（三元解包 + face_idx）
+        for mi in range(train_loader_s2.length()):
+            total_batches = train_loader_s2.count_batches(mi)
+            pbar = tqdm(total=total_batches, desc=f"[S3] Epoch {epoch} | mesh {mi}", leave=False)
+
+            mesh_loss_sum, mesh_cnt = 0.0, 0
+            for Xb, Yb, Ib in train_loader_s2.iter_batches(mi, sampling_size):
+                B_cur = Xb.shape[0]
+                loss  = trainer3.train_step(Xb, Yb, face_idx=Ib)
+                mesh_loss_sum += float(loss) * B_cur
+                mesh_cnt      += B_cur
+                pbar.update(1)
+            pbar.close()
+
+            if mesh_cnt:
+                mesh_avg = mesh_loss_sum / mesh_cnt
+                log_print(f"[S3][Epoch {epoch:02d}] file={mi:03d}: avg_loss={mesh_avg:.6f}")
+                if logger is not None:
+                    logger.add_scalar('stage3/train_loss_mesh', mesh_avg, epoch)
+
+        # —— Val（面聚合角度）——
+        val_ang  = trainer3.evaluate_angle_faceagg(dev_loader_s2, sampling_size)
+        val_loss = val_ang
+
+        # 调度（先 step 再读取当前 LR）
+        prev_lrs = [g['lr'] for g in opt3.param_groups]
+        sched3.step(val_loss)
+        cur_lrs = [g['lr'] for g in opt3.param_groups]
+        if cur_lrs != prev_lrs:
+            log_print(f"[S3] LR reduced: {prev_lrs} -> {cur_lrs}")
+
+        log_print(f"[S3] lr_patch={cur_lrs[0]:.2e} lr_face={cur_lrs[1]:.2e} | val_angle_deg(face-agg): {val_ang:.3f}°")
+        if logger is not None:
+            logger.add_scalar('stage3/val_angle_deg', val_ang, epoch)
+            logger.add_scalar('stage3/val_loss',      val_loss, epoch)
+
+        # —— Save latest/best（与 S2 同风格，含优化器/调度器）——
+        ckpt3.save('stage3_latest.pt', epoch_it=epoch, metric=val_loss)
+        if val_loss < best_val - IMPROVE_DELTA:
+            best_val = val_loss; no_improve = 0
+            ckpt3.save('stage3_best.pt', epoch_it=epoch, metric=best_val)
+            log_print(f"[S3] Now best val angle: {best_val:.6f}°")
+        else:
+            no_improve += 1
 # =======================================================
 # 主流程
 # =======================================================
@@ -449,7 +624,10 @@ def main():
         run_stage2(resume_first=True)
     else:
         log_print("[Main] Skip Stage 2.")
-
+    if RUN_S3:
+        run_stage3()
+    else:
+        log_print("[Main] Skip Stage 3.")
     logger.close()
     logfile.close()
 
