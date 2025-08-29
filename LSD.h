@@ -109,7 +109,6 @@ TriMesh::Normal getPolarAxis(TriMesh &mesh, int face_index, const std::vector<Tr
 int samplingNormal(
 	TriMesh &mesh,
 	int index,
-	const TriMesh::Normal &startnormal,
 	const std::vector<TriMesh::Point> &face_centroid,
 	const std::vector<TriMesh::Normal> &noisy_normals,
 	std::vector<line> &halfedgeset,

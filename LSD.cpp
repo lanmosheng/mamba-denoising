@@ -204,7 +204,6 @@ TriMesh::Normal getPolarAxis(TriMesh &mesh, int face_index, const std::vector<Tr
 int samplingNormal(
 	TriMesh &mesh,
 	int index,
-	const TriMesh::Normal &startnormal,
 	const std::vector<TriMesh::Point> &face_centroid,
 	const std::vector<TriMesh::Normal> &noisy_normals,
 	std::vector<line> &halfedgeset,
@@ -212,6 +211,9 @@ int samplingNormal(
 	std::vector<SampleDirection> &local_sample,
 	float *outputmat)
 {
+
+	// obtain polar axis
+	TriMesh::Normal startnormal = getPolarAxis(mesh, index, face_centroid);
 
 	for (int i = 0; i < local_sample.size(); i++)
 	{
@@ -438,5 +440,3 @@ void generateLocalSamplingOrder(std::vector<SampleDirection> &local_sample)
 		}
 	}
 }
-
-

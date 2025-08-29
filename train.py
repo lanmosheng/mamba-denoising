@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 from types import SimpleNamespace
-
+import random
 from train_utils.fileloader import Loader
 from train_utils.checkpoints import CheckpointIO
 from train_utils.trainer import Trainer
@@ -67,15 +67,15 @@ S2_MIN_LR              = 1e-6
 S2_EARLY_STOP_PATIENCE = 5   # 放宽，避免与调度器撞车
 
 # —— S3 ——
-S3_EPOCHS = 15               # 先跑 5~10 个 epoch 观察平台
-S3_LR_PATCH = 1.0e-4         # 二层步子大一些
-S3_LR_FACE  = 3.0e-5         # 一层步子小一些（patch 的 ~0.3x）
+S3_EPOCHS = 40               # 先跑 5~10 个 epoch 观察平台
+S3_LR_PATCH = 5.0e-5         # 二层步子大一些
+S3_LR_FACE  = 1e-5         # 一层步子小一些（patch 的 ~0.3x）
 S3_WEIGHT_DECAY = 1e-2
 S3_PLATEAU_PATIENCE = 4      # 进入平台就降 LR
 S3_IMPROVE_DELTA = 1e-3      # 角度改善阈值（度）
 S3_MIN_LR = 1e-6
 S3_SCHED_FACTOR = 0.5
-S3_SCHED_PATIENCE = 4
+S3_SCHED_PATIENCE = 2
 
 # 早停与“有提升”的容差
 IMPROVE_DELTA         = 2e-6
@@ -353,7 +353,9 @@ def run_stage1():
     log_print("==== Stage 1: Train Face-Encoder + Linear Head (rotated patches) ====")
     for epoch in range(start_epoch, S1_EPOCHS):
         # —— 训练 ——
-        for mi in range(train_loader_s1.length()):
+        mesh_ids = list(range(train_loader_s1.length()))
+        random.shuffle(mesh_ids)
+        for mi in mesh_ids:
             total_batches = train_loader_s1.count_batches(mi)
             pbar = tqdm(total=total_batches, desc=f"[S1] Epoch {epoch} | mesh {mi}", leave=False)
             mesh_loss_sum, mesh_cnt = 0.0, 0
@@ -460,7 +462,9 @@ def run_stage2(resume_first=True):
     log_print("==== Stage 2: Freeze Face, Train Patch-Encoder ====")
     for epoch in range(start_epoch, S2_EPOCHS):
         # —— 训练 ——
-        for mi in range(train_loader_s2.length()):
+        mesh_ids = list(range(train_loader_s2.length()))
+        random.shuffle(mesh_ids)
+        for mi in mesh_ids:
             total_batches = train_loader_s2.count_batches(mi)
             pbar = tqdm(total=total_batches, desc=f"[S2] Epoch {epoch} | mesh {mi}", leave=False)
             mesh_loss_sum, mesh_cnt = 0.0, 0
@@ -548,27 +552,31 @@ def run_stage3(resume_first=True):
     ckpt3 = CheckpointIO(out_dir, model=model3, optimizer=opt3, scheduler=sched3)
 
     # 3) 恢复
+    best_val, no_improve = float('inf'), 0
+
     start_epoch = 0
     if RESUME_S3 and resume_first:
         try:
-            scalars = ckpt3.load('stage3_latest.pt')
+            scalars = ckpt3.load('stage3_best.pt')
             start_epoch = int(scalars.get('epoch_it', -1)) + 1
             log_print(f"[S3] Resume from epoch {start_epoch}")
+            val0 = trainer3.evaluate_angle_faceagg(dev_loader_s2, sampling_size)
+            log_print(f"[S3] sanity before training, val_angle_deg: {val0:.3f}°")
+            best_val = val0
         except Exception as e:
             log_print(f"[S3] Resume skipped ({e})")
             info = _load_s1s2_best_into_base(model3, out_dir)
             log_print(f"[S3] Init from S1_best + S2_best: {info}")
 
-    best_val, no_improve = float('inf'), 0
 
-    # val0 = trainer3.evaluate_angle_faceagg(dev_loader_s2, sampling_size)
-    # log_print(f"[S3] sanity before training, val_angle_deg: {val0:.3f}°")
 
     # 4) 训练循环（沿用 S2 的口径）
     log_print("==== Stage 3: Joint Finetune (Face + Patch) ====")
     for epoch in range(start_epoch, S3_EPOCHS):
         # —— Train ——（三元解包 + face_idx）
-        for mi in range(train_loader_s2.length()):
+        mesh_ids = list(range(train_loader_s2.length()))
+        random.shuffle(mesh_ids)
+        for mi in mesh_ids:
             total_batches = train_loader_s2.count_batches(mi)
             pbar = tqdm(total=total_batches, desc=f"[S3] Epoch {epoch} | mesh {mi}", leave=False)
 

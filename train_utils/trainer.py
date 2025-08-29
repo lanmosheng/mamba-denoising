@@ -216,6 +216,10 @@ class Trainer:
         loss, metrics = self.compute_loss_two_head_faceagg(out, y_glb, R, face_idx)
 
         loss.backward()
+
+        total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+
+
         self.opt.step()
 
         if self.logger is not None and "loss_main" in metrics:

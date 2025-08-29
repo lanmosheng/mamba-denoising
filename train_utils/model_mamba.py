@@ -189,7 +189,7 @@ class TwoStageMamba(nn.Module):
         # 以下是你实验特性（可保留）
         residual_final: bool = True,
         grad_scale_s: float = 0.0,
-        small_dim: int = 16,
+        small_dim: int = 32,
     ):
         super().__init__()
         # 暴露给外部（S1 线性头读取）

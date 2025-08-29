@@ -31,6 +31,7 @@ struct pid
 		count = c;
 	}
 };
+int genGt = 1;
 std::vector<TriMesh> meshlist;
 
 std::vector<pid> thread_p[thread_number];
@@ -44,7 +45,7 @@ std::vector<std::vector<TriMesh::Point>> face_centroid_list;
 std::vector<std::vector<TriMesh::Normal>> filtered_normals_list;
 std::vector<std::vector<int>> flagz_list;
 
-int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size * 3], float groundtruth[3],
+int gLSD(int index, TriMesh &noisemesh, float outputmat[sampling_size * 3], float groundtruth[3],
 		 double sigma_s,
 		 std::vector<ring> &ringlist,
 		 std::vector<TriMesh::Normal> &filtered_normals,
@@ -55,17 +56,17 @@ int gLSD(int index, TriMesh &mesh2, float outputmat[sampling_size * 3], float gr
 {
 
 	// obtain polar axis
-	TriMesh::Normal startnormal = getPolarAxis(mesh2, index, face_centroid);
-
-	Eigen::Vector3d gtnormal(filtered_normals[index].data()[0], filtered_normals[index].data()[1], filtered_normals[index].data()[2]);
-	gtnormal.normalize();
-
-	groundtruth[0] = (float)gtnormal[0];
-	groundtruth[1] = (float)gtnormal[1];
-	groundtruth[2] = (float)gtnormal[2];
+	if (genGt)
+	{
+		Eigen::Vector3d gtnormal(filtered_normals[index].data()[0], filtered_normals[index].data()[1], filtered_normals[index].data()[2]);
+		gtnormal.normalize();
+		groundtruth[0] = (float)gtnormal[0];
+		groundtruth[1] = (float)gtnormal[1];
+		groundtruth[2] = (float)gtnormal[2];
+	}
 
 	// generate LSD
-	int err = samplingNormal(mesh2, index, startnormal, face_centroid, noisy_normals, halfedgeset, sigma_s, local_sample, outputmat);
+	int err = samplingNormal(noisemesh, index, face_centroid, noisy_normals, halfedgeset, sigma_s, local_sample, outputmat);
 	return err;
 }
 
@@ -82,10 +83,9 @@ int preprocessing(
 	int nom)
 {
 
-	ringlist.resize(mesh.n_faces());
-	noisy_normals.resize(mesh.n_faces());
-	face_centroid.resize(mesh.n_faces());
-	filtered_normals.resize(mesh.n_faces());
+	ringlist.resize(noisemesh.n_faces());
+	noisy_normals.resize(noisemesh.n_faces());
+	face_centroid.resize(noisemesh.n_faces());
 	halfedgeset.resize(noisemesh.n_halfedges());
 
 	for (TriMesh::HalfedgeIter it = noisemesh.halfedges_begin(); it != noisemesh.halfedges_end(); ++it)
@@ -94,12 +94,17 @@ int preprocessing(
 		halfedgeset[it->idx()].v2 = noisemesh.point(noisemesh.to_vertex_handle(*it));
 	}
 
-	makeRing(mesh, ringlist, 3);
-	getFaceNormal(mesh, filtered_normals);
+	makeRing(noisemesh, ringlist, 3);
 	getFaceNormal(noisemesh, noisy_normals);
 	getFaceCentroid(noisemesh, face_centroid);
 	sigma_s = getSigmaS(2, face_centroid, noisemesh);
-	markBoundaryFaces(mesh, flagz);
+	markBoundaryFaces(noisemesh, flagz);
+
+	if (genGt == 1)
+	{
+		filtered_normals.resize(mesh.n_faces());
+		getFaceNormal(mesh, filtered_normals);
+	}
 
 	return 0;
 }
@@ -137,11 +142,14 @@ int mkfolder(std::string outputname)
 
 void generateFile(const std::string &outdir, float *lsdcache, float *gtcache, bool first)
 {
-	std::string lsd_path = outdir + "/lsd.npy";
-	std::string gt_path = outdir + "/gt.npy";
 	const char *mode = first ? "w" : "a";
+	std::string lsd_path = outdir + "/lsd.npy";
 	cnpy::npy_save(lsd_path, lsdcache, std::vector<size_t>{1, sampling_size, 3}, mode); // (1,N,3)
-	cnpy::npy_save(gt_path, gtcache, std::vector<size_t>{1, 3}, mode);					// (1,3)
+	if (genGt == 1)
+	{
+		std::string gt_path = outdir + "/gt.npy";
+		cnpy::npy_save(gt_path, gtcache, std::vector<size_t>{1, 3}, mode); // (1,3)
+	}
 }
 void generatePatchFile(const std::string &outdir, const std::vector<int> &patches, bool first)
 {
@@ -228,6 +236,9 @@ int main(int argc, char *argv[])
 		printf("profile error\n");
 		return 0;
 	}
+
+	fscanf(profile, "%d", &genGt);
+
 	fscanf(profile, "%d", &numberofmesh);
 	meshlist.resize(numberofmesh);
 	noisemeshlist.resize(numberofmesh);
@@ -243,37 +254,42 @@ int main(int argc, char *argv[])
 	std::string patchfile;
 	std::string mesh_n[numberofmesh * 2 + 1];
 
-	// read ground truth meshes
-	printf("read mesh\n");
-	for (int nom = 0; nom < numberofmesh; nom++)
-	{
-		char buff[30];
-		fscanf(profile, "%s", buff);
-		mesh_n[nom] = buff;
-		if (!OpenMesh::IO::read_mesh(meshlist[nom], mesh_n[nom]))
-		{
-			printf("read %s mesh error", mesh_n[nom].c_str());
-			return 0;
-		}
-	}
 	// read noisy meshes
 	for (int nom = 0; nom < numberofmesh; nom++)
 	{
 		char buff[30];
 		fscanf(profile, "%s", buff);
-		mesh_n[nom + numberofmesh] = buff;
-		if (!OpenMesh::IO::read_mesh(noisemeshlist[nom], mesh_n[nom + numberofmesh]))
+		mesh_n[nom] = buff;
+		if (!OpenMesh::IO::read_mesh(noisemeshlist[nom], mesh_n[nom]))
 		{
-			printf("read %s data error", mesh_n[nom + numberofmesh].c_str());
-			return 0;
-		}
-		if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
-		{
-			printf("read %s data error, number of faces differ", mesh_n[nom].c_str());
+			printf("read %s data error", mesh_n[nom].c_str());
 			return 0;
 		}
 	}
+
+	if (genGt == 1)
+	{
+		// read ground truth meshes
+		printf("read mesh\n");
+		for (int nom = 0; nom < numberofmesh; nom++)
+		{
+			char buff[30];
+			fscanf(profile, "%s", buff);
+			mesh_n[nom + numberofmesh] = buff;
+			if (!OpenMesh::IO::read_mesh(meshlist[nom], mesh_n[nom + numberofmesh]))
+			{
+				printf("read %s mesh error", mesh_n[nom + numberofmesh].c_str());
+				return 0;
+			}
+			if (noisemeshlist[nom].n_faces() != meshlist[nom].n_faces())
+			{
+				printf("read %s data error, number of faces differ", mesh_n[nom].c_str());
+				return 0;
+			}
+		}
+	}
 	printf("read mesh over\n");
+
 	int px[3]; // parameters for gdata
 	// 0,1,2: the index range of output files groups, range(10, 20, 2) = 10, 12, 14, 16, 18
 
@@ -288,10 +304,10 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < 3; i++)
 		fscanf(profile, "%d", &px[i]);
 
-	int skip_lsd, skip_patch;
+	int gen_lsd, gen_patch;
 
-	fscanf(profile, "%d%d", &skip_lsd, &skip_patch);
-
+	fscanf(profile, "%d%d", &gen_lsd, &gen_patch);
+	// printf("%d %d %d\n", px[0], px[1], px[2]);
 	for (int nom = px[0]; nom < px[1]; nom += px[2])
 	{
 		preprocessing(
@@ -319,17 +335,17 @@ int main(int argc, char *argv[])
 	printf("Generate LSD\n");
 	for (int k0 = px[0]; k0 < px[1]; k0 += px[2])
 	{
-		printf("Processing %s\n", mesh_n[k0 + numberofmesh].c_str());
+		printf("Processing %s\n", mesh_n[k0].c_str());
 
-		std::string name = mesh_n[k0 + numberofmesh];
+		std::string name = mesh_n[k0];
 		if (name.rfind("strain/", 0) == 0)
 			name.erase(0, 7);
 		auto pos = name.find_last_of('.'); // 找最后一个点
 		if (pos != std::string::npos)
 			name.erase(pos);
 
-		int nfaces = meshlist[k0].n_faces();
-		if (!skip_lsd)
+		int nfaces = noisemeshlist[k0].n_faces();
+		if (gen_lsd)
 		{
 			std::string outputname = outputfile + name;
 			mkfolder(outputname);
@@ -346,7 +362,7 @@ int main(int argc, char *argv[])
 				memset(gtcache, 0, 3 * sizeof(float));
 			}
 		}
-		if (!skip_patch)
+		if (gen_patch)
 		{
 			printf("Generate Patch (Poisson-Disk centers, edge-adj)\n");
 			std::string patchname = patchfile + name;
@@ -368,11 +384,11 @@ int main(int argc, char *argv[])
 			// 2) 回调：环距 BFS 用“边相邻”，patch 仍用你现有 getPatch
 			gen.set_bfs_rings([&](int c, int R, std::vector<int> &out)
 							  {
-								  bfs_rings_edge(meshlist[k0], c, R, out); // ← 用上面的实现
+								  bfs_rings_edge(noisemeshlist[k0], c, R, out); // ← 用上面的实现
 							  });
 			gen.set_get_patch([&](int c, int /*M*/, std::vector<int> &out)
 							  {
-								  out = getPatch(meshlist[k0], c, nfaces_local); // 你已有的接口
+								  out = getPatch(noisemeshlist[k0], c, nfaces_local); // 你已有的接口
 							  });
 
 			// 3) 在线选中心（不做 IOU、不过滤）
@@ -399,7 +415,7 @@ int main(int argc, char *argv[])
 			for (size_t i = 0; i < centers.size(); ++i)
 			{
 				int c = centers[i];
-				std::vector<int> patches = getPatch(meshlist[k0], c, nfaces_local);
+				std::vector<int> patches = getPatch(noisemeshlist[k0], c, nfaces_local);
 				generatePatchFile(patchname, patches, /*is_first=*/i == 0);
 			}
 		}
