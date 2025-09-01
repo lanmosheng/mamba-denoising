@@ -9,9 +9,10 @@
 #include <sys/types.h>
 #include <errno.h>
 #endif
+
+static const size_t LSD_BLOCK_FACES = 1024; // 每次攒 1024 个面再写
+
 // std::vector<float> outputcache;
-float *outputcache;
-float *gtcache;
 std::vector<SampleDirection> local_sample;
 struct pid
 {
@@ -109,17 +110,6 @@ int preprocessing(
 	return 0;
 }
 
-void threadprocess(int p)
-{
-	for (int i = 0; i < thread_p[p].size(); i++)
-	{
-		int index = thread_p[p][i].index;
-		int meshidx = thread_p[p][i].meshindex;
-		int count = thread_p[p][i].count;
-
-		gLSD(index, noisemeshlist[meshidx], outputcache + count * sampling_size * 3, gtcache + count * 3, sigma_s_list[meshidx], ringlist_list[meshidx], filtered_normals_list[meshidx], halfedgeset_list[meshidx], noisy_normals_list[meshidx], face_centroid_list[meshidx], flagz_list[meshidx]);
-	}
-}
 int mkfolder(std::string outputname)
 {
 	std::string dir = outputname; // 形如 "dataset/文件夹名/"
@@ -140,17 +130,38 @@ int mkfolder(std::string outputname)
 	return 1;
 }
 
-void generateFile(const std::string &outdir, float *lsdcache, float *gtcache, bool first)
+void generateFileBlock(const std::string &outdir,
+					   const float *lsd_block, size_t K,
+					   const float *gt_block, size_t Kgt,
+					   bool first_block)
 {
-	const char *mode = first ? "w" : "a";
+	const char *mode = first_block ? "w" : "a";
 	std::string lsd_path = outdir + "/lsd.npy";
-	cnpy::npy_save(lsd_path, lsdcache, std::vector<size_t>{1, sampling_size, 3}, mode); // (1,N,3)
+	// 一次写 K 行 (K, N, 3)
+	cnpy::npy_save(lsd_path, lsd_block,
+				   std::vector<size_t>{K, (size_t)sampling_size, (size_t)3},
+				   mode);
 	if (genGt == 1)
 	{
 		std::string gt_path = outdir + "/gt.npy";
-		cnpy::npy_save(gt_path, gtcache, std::vector<size_t>{1, 3}, mode); // (1,3)
+		// 一次写 K 行 (K, 3)
+		cnpy::npy_save(gt_path, gt_block,
+					   std::vector<size_t>{Kgt, (size_t)3},
+					   mode);
 	}
 }
+
+// void generateFile(const std::string &outdir, float *lsdcache, float *gtcache, bool first)
+// {
+// 	const char *mode = first ? "w" : "a";
+// 	std::string lsd_path = outdir + "/lsd.npy";
+// 	cnpy::npy_save(lsd_path, lsdcache, std::vector<size_t>{1, sampling_size, 3}, mode); // (1,N,3)
+// 	if (genGt == 1)
+// 	{
+// 		std::string gt_path = outdir + "/gt.npy";
+// 		cnpy::npy_save(gt_path, gtcache, std::vector<size_t>{1, 3}, mode); // (1,3)
+// 	}
+// }
 void generatePatchFile(const std::string &outdir, const std::vector<int> &patches, bool first)
 {
 	std::string patch_path = outdir + "/patch_faces.npy";
@@ -323,16 +334,10 @@ int main(int argc, char *argv[])
 			nom);
 	}
 
-	outputcache = new float[sampling_size * 3];
-	gtcache = new float[3];
-	memset(outputcache, 0, sampling_size * 3 * sizeof(float));
-	memset(gtcache, 0, 3 * sizeof(float));
-
 	printf("Write Meta\n");
 	write_meta(outputfile);
 
 	generateLocalSamplingOrder(local_sample);
-	printf("Generate LSD\n");
 	for (int k0 = px[0]; k0 < px[1]; k0 += px[2])
 	{
 		printf("Processing %s\n", mesh_n[k0].c_str());
@@ -350,17 +355,42 @@ int main(int argc, char *argv[])
 			std::string outputname = outputfile + name;
 			mkfolder(outputname);
 			printf("Generate LSD\n");
+
+			float *lsd_block = new float[LSD_BLOCK_FACES * sampling_size * 3];
+			float *gt_block = new float[LSD_BLOCK_FACES * 3];
+			int cur_in_block = 0;
+			bool first_block = true;
 			for (int index = 0; index < nfaces; index++)
 			{
-				if (gLSD(index, noisemeshlist[k0], outputcache, gtcache, sigma_s_list[k0], ringlist_list[k0], filtered_normals_list[k0], halfedgeset_list[k0], noisy_normals_list[k0], face_centroid_list[k0], flagz_list[k0]) == -4)
+
+				float *lsd_ptr = lsd_block + cur_in_block * (sampling_size * 3);
+				float *gt_ptr = gt_block + cur_in_block * 3;
+
+				if (gLSD(index, noisemeshlist[k0], lsd_ptr, gt_ptr, sigma_s_list[k0], ringlist_list[k0], filtered_normals_list[k0], halfedgeset_list[k0], noisy_normals_list[k0], face_centroid_list[k0], flagz_list[k0]) == -4)
 				{
 					printf("LSD Error %s faceindex %d\n", mesh_n[k0].c_str(), index);
 					exit(1);
 				}
-				generateFile(outputname, outputcache, gtcache, index == 0);
-				memset(outputcache, 0, sampling_size * 3 * sizeof(float));
-				memset(gtcache, 0, 3 * sizeof(float));
+
+				cur_in_block++;
+				if (cur_in_block == LSD_BLOCK_FACES)
+				{
+					generateFileBlock(outputname, lsd_block, cur_in_block, gt_block, cur_in_block, first_block);
+					first_block = false;
+					cur_in_block = 0;
+				}
 			}
+
+			if (cur_in_block > 0)
+			{
+				generateFileBlock(outputname,
+								  lsd_block, cur_in_block,
+								  gt_block, cur_in_block,
+								  first_block);
+			}
+
+			delete[] lsd_block;
+			delete[] gt_block;
 		}
 		if (gen_patch)
 		{
@@ -420,8 +450,7 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	delete outputcache;
-	delete gtcache;
+
 	printf("Gdata Over!");
 	return 0;
 }

@@ -26,7 +26,6 @@ const int lsd_t_size = 40;
 const int sampling_size = lsd_r_size * lsd_t_size + 1;
 const int ringnum = 4;
 const int patch_num = 240;
-extern float *outputcache;
 // extern int supmat[lsdsize][lsdsize][3];
 
 enum FaceNeighborType
