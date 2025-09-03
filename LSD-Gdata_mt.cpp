@@ -10,7 +10,7 @@
 #include <errno.h>
 #endif
 
-static const size_t LSD_BLOCK_FACES = 1024; // 每次攒 1024 个面再写
+// static const size_t LSD_BLOCK_FACES = 100000;
 
 // std::vector<float> outputcache;
 std::vector<SampleDirection> local_sample;
@@ -130,24 +130,15 @@ int mkfolder(std::string outputname)
 	return 1;
 }
 
-void generateFileBlock(const std::string &outdir,
-					   const float *lsd_block, size_t K,
-					   const float *gt_block, size_t Kgt,
-					   bool first_block)
+void generateFile(const std::string &outdir, const float *lsd_block, const float *gt_block, size_t nfaces)
 {
-	const char *mode = first_block ? "w" : "a";
 	std::string lsd_path = outdir + "/lsd.npy";
-	// 一次写 K 行 (K, N, 3)
-	cnpy::npy_save(lsd_path, lsd_block,
-				   std::vector<size_t>{K, (size_t)sampling_size, (size_t)3},
-				   mode);
+	cnpy::npy_save(lsd_path, lsd_block, std::vector<size_t>{nfaces, (size_t)sampling_size, (size_t)3}, "w");
 	if (genGt == 1)
 	{
 		std::string gt_path = outdir + "/gt.npy";
 		// 一次写 K 行 (K, 3)
-		cnpy::npy_save(gt_path, gt_block,
-					   std::vector<size_t>{Kgt, (size_t)3},
-					   mode);
+		cnpy::npy_save(gt_path, gt_block, std::vector<size_t>{nfaces, (size_t)3}, "a");
 	}
 }
 
@@ -343,8 +334,8 @@ int main(int argc, char *argv[])
 		printf("Processing %s\n", mesh_n[k0].c_str());
 
 		std::string name = mesh_n[k0];
-		if (name.rfind("strain/", 0) == 0)
-			name.erase(0, 7);
+		if (name.rfind("stest/", 0) == 0)
+			name.erase(0, 6);
 		auto pos = name.find_last_of('.'); // 找最后一个点
 		if (pos != std::string::npos)
 			name.erase(pos);
@@ -356,15 +347,14 @@ int main(int argc, char *argv[])
 			mkfolder(outputname);
 			printf("Generate LSD\n");
 
-			float *lsd_block = new float[LSD_BLOCK_FACES * sampling_size * 3];
-			float *gt_block = new float[LSD_BLOCK_FACES * 3];
-			int cur_in_block = 0;
-			bool first_block = true;
+			float *lsd_cache = new float[nfaces * sampling_size * 3];
+			float *gt_cache = new float[nfaces * 3];
+			int cnt = 0;
 			for (int index = 0; index < nfaces; index++)
 			{
 
-				float *lsd_ptr = lsd_block + cur_in_block * (sampling_size * 3);
-				float *gt_ptr = gt_block + cur_in_block * 3;
+				float *lsd_ptr = lsd_cache + cnt * (sampling_size * 3);
+				float *gt_ptr = gt_cache + cnt * 3;
 
 				if (gLSD(index, noisemeshlist[k0], lsd_ptr, gt_ptr, sigma_s_list[k0], ringlist_list[k0], filtered_normals_list[k0], halfedgeset_list[k0], noisy_normals_list[k0], face_centroid_list[k0], flagz_list[k0]) == -4)
 				{
@@ -372,25 +362,14 @@ int main(int argc, char *argv[])
 					exit(1);
 				}
 
-				cur_in_block++;
-				if (cur_in_block == LSD_BLOCK_FACES)
-				{
-					generateFileBlock(outputname, lsd_block, cur_in_block, gt_block, cur_in_block, first_block);
-					first_block = false;
-					cur_in_block = 0;
-				}
+				cnt++;
 			}
 
-			if (cur_in_block > 0)
-			{
-				generateFileBlock(outputname,
-								  lsd_block, cur_in_block,
-								  gt_block, cur_in_block,
-								  first_block);
-			}
-
-			delete[] lsd_block;
-			delete[] gt_block;
+			generateFile(outputname, lsd_cache, gt_cache, nfaces);
+			// std::string cmdstr = "python check.py " + outputname + "/lsd.npy --strict";
+			// system(cmdstr.c_str());
+			delete[] lsd_cache;
+			delete[] gt_cache;
 		}
 		if (gen_patch)
 		{
@@ -446,11 +425,16 @@ int main(int argc, char *argv[])
 			{
 				int c = centers[i];
 				std::vector<int> patches = getPatch(noisemeshlist[k0], c, nfaces_local);
+				int cur = c;
+				while (patches.size() != patch_num)
+				{
+					cur++;
+					patches = getPatch(noisemeshlist[k0], cur, nfaces_local);
+				}
 				generatePatchFile(patchname, patches, /*is_first=*/i == 0);
 			}
 		}
 	}
-
 	printf("Gdata Over!");
 	return 0;
 }

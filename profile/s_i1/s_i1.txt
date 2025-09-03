@@ -114,7 +114,7 @@ strain/Octahedron.obj
 strain/rockerarm.obj
 strain/rockerarm.obj
 strain/rockerarm.obj
-strain/sculpt.obj
+strain/sculpt.objf
 strain/sculpt.obj
 strain/sculpt.obj
 strain/vase100K.obj
@@ -122,4 +122,4 @@ strain/vase100K.obj
 strain/vase100K.obj
 valset/data1001/
 valpatches/
-57 60 1 1 1 1
+0 60 1 1 1 1

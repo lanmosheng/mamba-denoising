@@ -6,11 +6,11 @@ import numpy as np
 import torch.nn.functional as F
 
 # ====== 路径与开关 ======
-MESH_ROOT   = 'strain'
-LSD_ROOT    = 'valset/data1001'
-GT_ROOT     = 'valset/data1001'     # 与训练一致，用于评估
+MESH_ROOT   = 'stest'
+LSD_ROOT    = 'valset/test1001'
+GT_ROOT     = 'valset/test1001'     # 与训练一致，用于评估
 PATCH_ROOT  = 'valpatches'
-OUTPUT_PATH = 'result'
+OUTPUT_PATH = 'f_result'
 
 # 优先选择本次训练产物；若不存在，会自动降级
 MODEL_PATH_CANDIDATES = [
