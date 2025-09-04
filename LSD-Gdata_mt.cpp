@@ -308,8 +308,12 @@ int main(int argc, char *argv[])
 
 	int gen_lsd, gen_fullpatch, gen_patch;
 
-	fscanf(profile, "%d%d", &gen_lsd, &gen_fullpatch, &gen_patch);
-	// printf("%d %d %d\n", px[0], px[1], px[2]);
+	fscanf(profile, "%d%d%d", &gen_lsd, &gen_fullpatch, &gen_patch);
+	if (gen_fullpatch == 1 && gen_patch == 1)
+	{
+		printf("Cannot generate two kind of patch in the same time!\n");
+		exit(1);
+	}
 	for (int nom = px[0]; nom < px[1]; nom += px[2])
 	{
 		preprocessing(
@@ -334,11 +338,14 @@ int main(int argc, char *argv[])
 		printf("Processing %s\n", mesh_n[k0].c_str());
 
 		std::string name = mesh_n[k0];
-		if (name.rfind("stest/", 0) == 0)
-			name.erase(0, 6);
-		auto pos = name.find_last_of('.'); // 找最后一个点
-		if (pos != std::string::npos)
-			name.erase(pos);
+		auto pos1 = name.find_last_of('/');
+		if (pos1 != std::string::npos)
+			name.erase(0, pos1 + 1);
+		auto pos2 = name.find_last_of('.'); // 找最后一个点
+		if (pos2 != std::string::npos)
+			name.erase(pos2);
+
+		// printf("name:%s\n", name.c_str());
 
 		int nfaces = noisemeshlist[k0].n_faces();
 		if (gen_lsd)
@@ -373,7 +380,7 @@ int main(int argc, char *argv[])
 		}
 		if (gen_fullpatch)
 		{
-			printf("Generate Patch (Poisson-Disk centers, edge-adj)\n");
+			printf("Generate Full Patch\n");
 			std::string patchname = patchfile + name;
 			mkfolder(patchname);
 			for (size_t i = 0; i < nfaces; ++i)
@@ -384,7 +391,24 @@ int main(int argc, char *argv[])
 		}
 		if (gen_patch)
 		{
-			
+			printf("Generate Patch\n");
+			std::string patchname = patchfile + name;
+			std::unordered_set<int> visited;
+			printf("%s\n", patchname.c_str());
+			mkfolder(patchname);
+			for (size_t i = 0; i < nfaces; i++)
+			{
+				while (i + 1 < nfaces && visited.count(i))
+					i++;
+				if (i >= nfaces)
+					continue;
+				std::vector<int> patches = getPatch(noisemeshlist[k0], i, nfaces);
+				for (int face_idx : patches)
+				{
+					visited.insert(face_idx);
+				}
+				generatePatchFile(patchname, patches, i == 0);
+			}
 		}
 	}
 	printf("Gdata Over!");
