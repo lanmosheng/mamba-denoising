@@ -346,8 +346,6 @@ std::vector<int> getPatch(TriMesh &mesh, int index, const int n_faces)
 			count++;
 			if (count == patch_num)
 			{
-				// if (index == 496617)
-				// 	printf("asd???");
 				return;
 			}
 			for (TriMesh::FaceFaceIter ff_it = mesh.ff_begin(TriMesh::FaceHandle(cur)); ff_it.is_valid(); ff_it++)
@@ -356,8 +354,6 @@ std::vector<int> getPatch(TriMesh &mesh, int index, const int n_faces)
 				if (!visited.count(nxt))
 				{
 					visited.insert(nxt);
-					// if (index == 496617)
-					// 	printf("%d\n", nxt);
 					q.push(nxt);
 				}
 			}
@@ -368,7 +364,10 @@ std::vector<int> getPatch(TriMesh &mesh, int index, const int n_faces)
 
 	if (ret.size() != patch_num)
 	{
-		printf("Get Patch Error, Face %d Only get %d faces\n", index, ret.size());
+		while (ret.size() < patch_num)
+		{
+			ret.push_back(-1);
+		}
 	}
 
 	return ret;

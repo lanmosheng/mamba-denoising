@@ -114,4 +114,5 @@ strain/vase100K.obj
 strain/vase100K.obj
 test_train1001_2/
 test_patches_2/
-15 35 1 1 1 1
+15 35 1 
+1 1

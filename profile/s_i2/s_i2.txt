@@ -176,4 +176,4 @@ stest/turbine_Lp.obj
 stest/turbine_Lp.obj
 valset/test1001/
 valpatches/
-45 49 1 0 1
+1 2 1 0 1

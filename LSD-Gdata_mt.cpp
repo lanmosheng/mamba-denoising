@@ -306,9 +306,9 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < 3; i++)
 		fscanf(profile, "%d", &px[i]);
 
-	int gen_lsd, gen_patch;
+	int gen_lsd, gen_fullpatch, gen_patch;
 
-	fscanf(profile, "%d%d", &gen_lsd, &gen_patch);
+	fscanf(profile, "%d%d", &gen_lsd, &gen_fullpatch, &gen_patch);
 	// printf("%d %d %d\n", px[0], px[1], px[2]);
 	for (int nom = px[0]; nom < px[1]; nom += px[2])
 	{
@@ -371,68 +371,20 @@ int main(int argc, char *argv[])
 			delete[] lsd_cache;
 			delete[] gt_cache;
 		}
-		if (gen_patch)
+		if (gen_fullpatch)
 		{
 			printf("Generate Patch (Poisson-Disk centers, edge-adj)\n");
 			std::string patchname = patchfile + name;
 			mkfolder(patchname);
-
-			const int nfaces_local = nfaces;							 // 或 meshlist[k0].n_faces()
-			const int K_patch = /* 你构建 patch 所用的“环层半径 K” */ 6; // 不确定就随便先给，或用 r_block_override
-			const int M_expected = patch_num;
-
-			// 1) 配置 Poisson 生成器（按边相邻）
-			PoissonDiskCenterGen gen(
-				nfaces_local,
-				K_patch,
-				0.5, // 阻隔系数：越大中心越稀疏；0.5~0.7 常用
-				3,	 // 若不知道 K，可改成具体环距 r_block（如 5）
-				true,
-				42);
-
-			// 2) 回调：环距 BFS 用“边相邻”，patch 仍用你现有 getPatch
-			gen.set_bfs_rings([&](int c, int R, std::vector<int> &out)
-							  {
-								  bfs_rings_edge(noisemeshlist[k0], c, R, out); // ← 用上面的实现
-							  });
-			gen.set_get_patch([&](int c, int /*M*/, std::vector<int> &out)
-							  {
-								  out = getPatch(noisemeshlist[k0], c, nfaces_local); // 你已有的接口
-							  });
-
-			// 3) 在线选中心（不做 IOU、不过滤）
-			const int max_centers = -1; // 可设上限避免爆时长；-1=不限
-			const std::vector<int> &centers = gen.run(max_centers);
-
-			// 4) （可选）补洞，确保 coverage≈1.0（薄片/孔洞时有用）
-			// gen.fill_gaps_if_any(/*M=*/M_expected, /*r_block_fill=*/-1);
-
-			// 5) 打印统计
-			if (M_expected > 0)
+			for (size_t i = 0; i < nfaces; ++i)
 			{
-				auto st = gen.stats(/*check_cover_with_patch=*/true, /*M=*/M_expected);
-				printf("[centers] r_block=%d | count=%zu | coverage=%.3f (%d/%d) | avg_cov=%.2f | max_cov=%d\n",
-					   gen.r_block_used(), centers.size(), st.coverage_rate, st.covered_faces, nfaces_local,
-					   st.avg_cov, st.max_cov);
+				std::vector<int> patches = getPatch(noisemeshlist[k0], i, nfaces);
+				generatePatchFile(patchname, patches, i == 0);
 			}
-			else
-			{
-				printf("[centers] r_block=%d | count=%zu\n", gen.r_block_used(), centers.size());
-			}
-
-			// 6) 仅为“选中中心”写 patch
-			for (size_t i = 0; i < centers.size(); ++i)
-			{
-				int c = centers[i];
-				std::vector<int> patches = getPatch(noisemeshlist[k0], c, nfaces_local);
-				int cur = c;
-				while (patches.size() != patch_num)
-				{
-					cur++;
-					patches = getPatch(noisemeshlist[k0], cur, nfaces_local);
-				}
-				generatePatchFile(patchname, patches, /*is_first=*/i == 0);
-			}
+		}
+		if (gen_patch)
+		{
+			
 		}
 	}
 	printf("Gdata Over!");
