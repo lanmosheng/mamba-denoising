@@ -122,4 +122,5 @@ strain/vase100K.obj
 strain/vase100K.obj
 valset/data1001/
 valpatches/
-0 60 1 1 1 1
+0 60 1
+1 0 1

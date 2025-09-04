@@ -3,7 +3,7 @@ import os
 import json
 from typing import Dict, List, Tuple, Optional
 import numpy as np
-
+import math
 # ----------------------------
 # Utility functions
 # ----------------------------
@@ -49,60 +49,59 @@ def _resolve_patch_path(mesh_dir: str, patch_root: Optional[str] = None) -> str:
 # ----------------------------
 # Loader
 # ----------------------------
+import os, math
+from typing import Optional, List, Tuple
+import numpy as np
 
-class Loader:
+class S1FaceLoaderV2:
     """
-    Patch-centric loader.
-
-    - 主数据是 patch 索引（patch_faces.npy），与 lsd/gt 分别位于独立目录：
-        dataset_root/<mesh>/lsd.npy, gt.npy
-        patch_root/<mesh>/patch_faces.npy  (K, M)  # 稀疏或稠密
-    - sampling_size = lsd_r_size * lsd_t_size + 1
-    - 每个 mesh 以“一个中心面=一个样本（其 patch）”展开
-    - 支持 **稀疏 patch**：patch_faces.npy 只存被选中的 K 个中心 → 形状 (K, M)
-
-    - 本 Loader **不做旋转与标准化**（已迁至 Trainer）。
-    - 返回（默认）：
-        data:  (num_batches, B, M, N, 3)
-        label: (num_batches, B, M, 3)
-      若 `return_face_idx=True`，额外返回：
-        face_idx: (num_batches, B, M)  每个 (B,M) 位置对应的全局面号
+    第一层 FaceEncoder 训练数据管道（仅旋转规范化；不做 z-score）
+    - 旧接口保留：dataset_root, batch_size, meta_path=None, patch_root=None
+    - 文件搜索/校验沿用：_default_meta_path/_load_meta/_list_mesh_dirs/_resolve_patch_path
+    - 训练逻辑：
+        1) 每个 mesh 内，打乱所有 patch 行顺序
+        2) 每个 epoch 仅取该 mesh 的一个切片（如 10%），跨 epoch 不重叠；确保每个 epoch 每个 mesh 至少 1 个 patch
+        3) 以 patch 为单位：取中心面（faces[0]）的 LSD token0 作为朝向锚点，计算 R 使其对齐到 (1,0,0)
+        4) 用同一 R 旋转该 patch 的所有 LSD；并用同一 R 旋转对应的 GT 法向
+        5) 逐面打包为 batch: X ∈ [B, N, 3], Y ∈ [B, 3]
     """
-    def __init__(self,
-                 dataset_root: str,
-                 batch_size: int,
-                 meta_path: Optional[str] = None,
-                 patch_root: Optional[str] = None,
-                 drop_last: bool = True,
-                 shuffle_faces: bool = False,
-                 mmap: bool = True,             # 兼容保留，Loader 内部不使用
-                 return_face_idx: bool = False):   # ☆ 新增：是否返回 (B,M) 的面号
-        self.dataset_root = dataset_root
-        self.patch_root = patch_root
-        if self.patch_root is None:
-            raise ValueError("patch_root must be provided because patches and dataset live in separate folders")
-        self.batch_size = int(batch_size)
-        self.drop_last = bool(drop_last)
-        self.shuffle_faces = bool(shuffle_faces)
-        self.mmap_mode = 'r' if mmap else None
-
-        # 新增
-        self.return_face_idx = bool(return_face_idx)
-
+    def __init__(
+        self,
+        dataset_root: str,
+        batch_size: int,
+        meta_path: Optional[str] = None,
+        patch_root: Optional[str] = None,
+        *,
+        slice_ratio: float = 0.10,         # 每个 epoch 取多少比例的 patch（默认 10%）
+        shuffle_faces: bool = True,
+        shuffle_seed: Optional[int] = 0,
+        drop_last: bool = True,
+        mmap_mode: Optional[str] = 'r',
+    ):
+        # ---- 旧工具函数：meta & 路径解析 ----
         meta_path = meta_path or _default_meta_path(dataset_root)
         self.meta = _load_meta(meta_path)
-        self.lsd_r_size = int(self.meta['lsd_r_size'])
-        self.lsd_t_size = int(self.meta['lsd_t_size'])
-        self.patch_num  = int(self.meta['patch_num'])
-        self.sampling_size = self.lsd_r_size * self.lsd_t_size + 1
+        self.lsd_r_size   = int(self.meta['lsd_r_size'])
+        self.lsd_t_size   = int(self.meta['lsd_t_size'])
+        self.patch_num    = int(self.meta['patch_num'])
+        self.sampling_size = 1 + self.lsd_r_size * self.lsd_t_size  # N
 
+        self.dataset_root = dataset_root
+        self.patch_root   = patch_root
+        self.batch_size   = int(batch_size)
+        self.slice_ratio  = float(slice_ratio)
+        assert 0 < self.slice_ratio <= 1.0, "slice_ratio 必须在 (0,1] 内"
+        self.shuffle_faces = bool(shuffle_faces)
+        self.shuffle_seed  = shuffle_seed
+        self.drop_last     = bool(drop_last)
+        self.mmap_mode     = mmap_mode
+
+        # ---- 旧文件搜索逻辑 ----
         self.mesh_dirs = _list_mesh_dirs(dataset_root)
         if not self.mesh_dirs:
             raise RuntimeError(f"No mesh dirs with lsd.npy & gt.npy under '{dataset_root}'")
 
-        # Build records and validate shapes
-        # record: (lsd_path, gt_path, patch_path, nfaces)
-        self._records: List[Tuple[str, str, str, int]] = []
+        self._records: List[Tuple[str, str, str, int]] = []  # (lsd_path, gt_path, patch_path, nfaces)
         for mdir in self.mesh_dirs:
             lsd_path = os.path.join(mdir, 'lsd.npy')
             gt_path  = os.path.join(mdir, 'gt.npy')
@@ -116,178 +115,158 @@ class Loader:
                 raise ValueError(f"{lsd_path}: expected (nfaces,{self.sampling_size},3), got {lsd.shape}")
             if gt.ndim != 2 or gt.shape[1] != 3:
                 raise ValueError(f"{gt_path}: expected (nfaces,3), got {gt.shape}")
-            # 允许 **稀疏** patch：只校验第二维等于 M
             if patches.ndim != 2 or patches.shape[1] != self.patch_num:
-                raise ValueError(f"{patch_path}: expected (*,{self.patch_num}), got {patches.shape}")
+                raise ValueError(f"{patch_path}: expected (K,{self.patch_num}), got {patches.shape}")
 
             nfaces = int(lsd.shape[0])
             self._records.append((lsd_path, gt_path, patch_path, nfaces))
 
-    def length(self) -> int:
-        return len(self._records)
+        # ---- 每个 mesh 的打乱顺序与切片大小 ----
+        self._mesh_patch_orders: List[np.ndarray] = []  # 打乱后的 patch 行号
+        self._mesh_k: List[int] = []                   # 每个 mesh 的 patch 行数 K
+        self._mesh_slice_size: List[int] = []          # 每片大小（>=1）
+        self._mesh_slices_per_mesh: List[int] = []     # 每个 mesh 的切片数（>=1）
 
-    def get_meta_data(self) -> Dict[str, int]:
+        for mi, (_, _, patch_path, _) in enumerate(self._records):
+            pf = np.load(patch_path, mmap_mode=self.mmap_mode)
+            k = int(pf.shape[0])
+            order = np.arange(k, dtype=np.int64)
+            if self.shuffle_faces:
+                rng = np.random.RandomState(None if self.shuffle_seed is None else (self.shuffle_seed + mi))
+                rng.shuffle(order)
+            self._mesh_patch_orders.append(order)
+            self._mesh_k.append(k)
+            slice_size = max(1, int(math.ceil(k * self.slice_ratio)))
+            self._mesh_slice_size.append(slice_size)
+            self._mesh_slices_per_mesh.append(max(1, int(math.ceil(k / slice_size))))
+
+        self._epoch = 0
+
+        # 旋转目标方向（固定到 (1,0,0)）
+        self._canonical_dir = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+
+    # ========== 公共接口 ==========
+    def set_epoch(self, epoch: int):
+        self._epoch = int(epoch)
+
+    def iter_batches(self):
+        """
+        逐批产出单面样本（已旋转规范化）：
+          X: (B, N, 3)   —— 旋转后的 LSD
+          Y: (B, 3)      —— 旋转后的 GT 法向
+          元信息：mesh_idx / face_idx / center_face / patch_row
+        """
+        buf_X, buf_Y = [], []
+        buf_mid, buf_fid, buf_cen, buf_row = [], [], [], []
+
+        for mi, (lsd_path, gt_path, patch_path, nfaces) in enumerate(self._records):
+            lsd         = np.load(lsd_path, mmap_mode=self.mmap_mode)  # (nfaces, N, 3)
+            gt          = np.load(gt_path,  mmap_mode=self.mmap_mode)  # (nfaces, 3)
+            patch_faces = np.load(patch_path, mmap_mode=self.mmap_mode) # (K, M)
+
+            if patch_faces.min() < 0 or patch_faces.max() >= nfaces:
+                raise IndexError(f"Illegal face index in {patch_path}. Valid range [0,{nfaces-1}]")
+
+            center_rows = self._center_indices_sparse_or_dense(
+                patch_faces, nfaces, os.path.basename(os.path.dirname(patch_path))
+            )
+
+            k = self._mesh_k[mi]
+            slice_size       = self._mesh_slice_size[mi]
+            slices_per_mesh  = self._mesh_slices_per_mesh[mi]
+            sid = self._epoch % slices_per_mesh
+            beg = sid * slice_size
+            end = min(k, beg + slice_size)
+            chosen_rows = center_rows[beg:end]  # 保证至少 1 行
+
+            for r in chosen_rows:
+                faces = patch_faces[int(r)]          # (M,)
+                # 以中心面（faces[0]）LSD 的 token0 作为锚点，估计旋转
+                X_patch = lsd[faces]                 # (M, N, 3)
+                R = self._rotation_from_center_token0(X_patch)  # (3,3)
+                X_rot = X_patch @ R.T                # 旋转整个 patch 的 LSD -> (M, N, 3)
+
+                # 标签也用同一 R 旋转到同一坐标系
+                Y_rot = gt[faces] @ R.T              # (M, 3)
+
+                center = int(faces[0])
+                for i, fid in enumerate(faces):
+                    buf_X.append(X_rot[i].astype(np.float32))
+                    buf_Y.append(Y_rot[i].astype(np.float32))
+                    buf_mid.append(mi)
+                    buf_fid.append(int(fid))
+                    buf_cen.append(center)
+                    buf_row.append(int(r))
+
+                    if len(buf_X) == self.batch_size:
+                        yield self._pack_batch(buf_X, buf_Y, buf_mid, buf_fid, buf_cen, buf_row)
+                        buf_X, buf_Y, buf_mid, buf_fid, buf_cen, buf_row = [], [], [], [], [], []
+
+        if len(buf_X) and not self.drop_last:
+            yield self._pack_batch(buf_X, buf_Y, buf_mid, buf_fid, buf_cen, buf_row)
+
+    # ========== 内部工具 ==========
+    def _pack_batch(self, X_list, Y_list, mid_list, fid_list, cen_list, row_list):
+        X = np.stack(X_list, axis=0)  # (B, N, 3) float32
+        Y = np.stack(Y_list, axis=0)  # (B, 3)    float32
         return {
-            'lsd_r_size': self.lsd_r_size,
-            'lsd_t_size': self.lsd_t_size,
-            'patch_num': self.patch_num,
+            'X': X, 'Y': Y,
+            'mesh_idx': np.asarray(mid_list, dtype=np.int64),
+            'face_idx': np.asarray(fid_list, dtype=np.int64),
+            'center_face': np.asarray(cen_list, dtype=np.int64),
+            'patch_row': np.asarray(row_list, dtype=np.int64),
         }
 
-    # ----------------------------
-    # internal helpers
-    # ----------------------------
     def _center_indices_sparse_or_dense(self, patch_faces: np.ndarray, nfaces: int, mesh_name: str) -> np.ndarray:
-        """Return row indices to iterate patches.
-        - 稠密模式：patch_faces.shape[0] == nfaces → 遍历所有行（等价于所有面）
-        - 稀疏模式：patch_faces.shape[0] != nfaces → 每一行就是一个样本
-        """
         ncenters = int(patch_faces.shape[0])
         dense = (ncenters == nfaces)
         if dense:
-            center_idx = np.arange(nfaces, dtype=np.int64)
-            print(f"[loader] mesh={mesh_name} patches=DENSE rows={ncenters} (== nfaces)", flush=True)
+            idx = np.arange(nfaces, dtype=np.int64)
+            print(f"[loader] mesh={mesh_name} patches=DENSE rows={nfaces}", flush=True)
         else:
-            center_idx = np.arange(ncenters, dtype=np.int64)
+            idx = np.arange(ncenters, dtype=np.int64)
             print(f"[loader] mesh={mesh_name} patches=SPARSE rows={ncenters}/{nfaces}", flush=True)
         if self.shuffle_faces:
-            np.random.shuffle(center_idx)
-        return center_idx
+            np.random.shuffle(idx)
+        return idx
 
-    # ----------------------------
-    # batch APIs
-    # ----------------------------
-    def generate_batch(self, mesh_idx: int, sampling_size: Optional[int] = None):
-        """Load an entire mesh into numpy batches:
-        Returns:
-            data:  (num_batches, B, M, N, 3)
-            label: (num_batches, B, M, 3)
-            [face_idx: (num_batches, B, M)]  if return_face_idx=True
+    # === 旋转估计 ===
+    def _rotation_from_center_token0(self, X_patch: np.ndarray) -> np.ndarray:
         """
-        if sampling_size is not None and sampling_size != self.sampling_size:
-            raise ValueError(f"sampling_size mismatch: got {sampling_size}, meta says {self.sampling_size}")
-
-        lsd_path, gt_path, patch_path, nfaces = self._records[int(mesh_idx)]
-        lsd         = np.load(lsd_path, mmap_mode=self.mmap_mode)
-        gt          = np.load(gt_path,  mmap_mode=self.mmap_mode)
-        patch_faces = np.load(patch_path, mmap_mode=self.mmap_mode)
-
-        if patch_faces.min() < 0 or patch_faces.max() >= nfaces:
-            raise IndexError(f"Illegal face index in {patch_path}. Valid range [0,{nfaces-1}]")
-
-        mesh_name = os.path.basename(os.path.dirname(patch_path))
-        center_idx = self._center_indices_sparse_or_dense(patch_faces, nfaces, mesh_name)
-
-        B = self.batch_size
-        total = len(center_idx)
-        num_batches = total // B
-        if not self.drop_last and total % B != 0:
-            num_batches += 1
-
-        batches_X: List[np.ndarray] = []
-        batches_Y: List[np.ndarray] = []
-        batches_I: List[np.ndarray] = [] if self.return_face_idx else None
-
-        for bi in range(num_batches):
-            start = bi * B
-            end = min(start + B, total)
-            cur_centers = center_idx[start:end]
-            cur_B = len(cur_centers)
-            if cur_B < B and self.drop_last:
-                break
-
-            Xb = np.empty((cur_B, self.patch_num, self.sampling_size, 3), dtype=np.float32)
-            Yb = np.empty((cur_B, self.patch_num, 3), dtype=np.float32)
-            if self.return_face_idx:
-                Ib = np.empty((cur_B, self.patch_num), dtype=np.int64)
-
-            for i, c in enumerate(cur_centers):
-                faces = patch_faces[c]            # (M,)
-                X = lsd[faces]                    # (M,N,3)
-                Y = gt[faces]                     # (M,3)
-
-                Xb[i] = X.astype(np.float32)
-                Yb[i] = Y.astype(np.float32)
-                if self.return_face_idx:
-                    Ib[i] = faces.astype(np.int64)
-
-            batches_X.append(Xb)
-            batches_Y.append(Yb)
-            if self.return_face_idx:
-                batches_I.append(Ib)
-
-        if not batches_X:
-            empty_X = np.empty((0, self.batch_size, self.patch_num, self.sampling_size, 3), dtype=np.float32)
-            empty_Y = np.empty((0, self.batch_size, self.patch_num, 3), dtype=np.float32)
-            if self.return_face_idx:
-                empty_I = np.empty((0, self.batch_size, self.patch_num), dtype=np.int64)
-                return empty_X, empty_Y, empty_I
-            return empty_X, empty_Y
-
-        data  = np.stack(batches_X, axis=0)
-        label = np.stack(batches_Y, axis=0)
-        if self.return_face_idx:
-            face_idx = np.stack(batches_I, axis=0)
-            return data, label, face_idx
-        return data, label
-
-    def iter_batches(self, mesh_idx: int, sampling_size: int | None = None):
-        """Yield small batches for a mesh (streaming).
-        Yields:
-            Xb: (B, M, N, 3)
-            Yb: (B, M, 3)
-            [Ib: (B, M)] if return_face_idx=True
+        用中心面（faces[0]）的 LSD token0 作为朝向向量 a，计算 R 使 a -> (1,0,0)。
+        仅依赖 LSD，不触及 GT。对退化情形做稳定处理。
         """
-        if sampling_size is not None and sampling_size != self.sampling_size:
-            raise ValueError(f"sampling_size mismatch: got {sampling_size}, meta says {self.sampling_size}")
+        a = X_patch[0, 0].astype(np.float64)           # 中心面的 token0
+        a_norm = np.linalg.norm(a)
+        if a_norm < 1e-12:
+            return np.eye(3, dtype=np.float64)         # 退化：不旋转
+        a /= a_norm
+        b = self._canonical_dir                        # (1,0,0)
+        return self._rotation_matrix_a2b(a, b)
 
-        lsd_path, gt_path, patch_path, nfaces = self._records[int(mesh_idx)]
-        lsd         = np.load(lsd_path, mmap_mode=self.mmap_mode)
-        gt          = np.load(gt_path,  mmap_mode=self.mmap_mode)
-        patch_faces = np.load(patch_path, mmap_mode=self.mmap_mode)
+    @staticmethod
+    def _rotation_matrix_a2b(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> np.ndarray:
+        """返回将单位向量 a 旋到 b 的 3x3 旋转矩阵（稳定处理平行/反平行）。"""
+        v = np.cross(a, b)
+        c = float(np.dot(a, b))    # cosθ
+        s = np.linalg.norm(v)      # |v| = sinθ
 
-        if patch_faces.min() < 0 or patch_faces.max() >= nfaces:
-            raise IndexError(f"Illegal face index in {patch_path}. Valid range [0,{nfaces-1}]")
+        if s < eps:
+            if c > 0.0:
+                return np.eye(3, dtype=np.float64)  # a≈b
+            # a≈-b：选任一与 a 不共线的轴做 180°
+            axis = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+            if abs(a[0]) > 0.9:
+                axis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+            axis = axis - a * np.dot(a, axis)
+            axis /= (np.linalg.norm(axis) + eps)
+            K = np.array([[0, -axis[2], axis[1]],
+                          [axis[2], 0, -axis[0]],
+                          [-axis[1], axis[0], 0]], dtype=np.float64)
+            return np.eye(3) + 2 * (K @ K)
 
-        mesh_name = os.path.basename(os.path.dirname(patch_path))
-        center_idx = self._center_indices_sparse_or_dense(patch_faces, nfaces, mesh_name)
-
-        B = self.batch_size
-        total = len(center_idx)
-        num_batches = total // B + (0 if self.drop_last or total % B == 0 else 1)
-
-        for bi in range(num_batches):
-            start = bi * B
-            end = min(start + B, total)
-            if end - start < B and self.drop_last:
-                break
-            cur_centers = center_idx[start:end]
-            cur_B = len(cur_centers)
-
-            Xb = np.empty((cur_B, self.patch_num, self.sampling_size, 3), dtype=np.float32)
-            Yb = np.empty((cur_B, self.patch_num, 3), dtype=np.float32)
-            if self.return_face_idx:
-                Ib = np.empty((cur_B, self.patch_num), dtype=np.int64)
-
-            for i, c in enumerate(cur_centers):
-                faces = patch_faces[c]                # (M,)
-                X = lsd[faces]                        # (M,N,3)
-                Y = gt[faces]                         # (M,3)
-
-                Xb[i] = X.astype(np.float32)
-                Yb[i] = Y.astype(np.float32)
-                if self.return_face_idx:
-                    Ib[i] = faces.astype(np.int64)
-
-            if self.return_face_idx:
-                yield Xb, Yb, Ib
-            else:
-                yield Xb, Yb
-
-    def count_batches(self, mesh_idx: int) -> int:
-        """Return number of batches for this mesh, honoring sparse patch_faces and drop_last."""
-        _, _, patch_path, nfaces = self._records[int(mesh_idx)]
-        patch_faces = np.load(patch_path, mmap_mode=self.mmap_mode)
-        ncenters = int(patch_faces.shape[0])
-        total = ncenters  # 稀疏/稠密统一按行数
-        B = self.batch_size
-        return total // B + (0 if self.drop_last or total % B == 0 else 1)
+        vx, vy, vz = v / s
+        K = np.array([[0, -vz, vy],
+                      [vz, 0, -vx],
+                      [-vy, vx, 0]], dtype=np.float64)
+        return np.eye(3) + K * s + (K @ K) * ((1.0 - c) / (s * s + eps))
