@@ -15,7 +15,13 @@ virtualData
 *.onnx
 *.ply
 *.bin
+
 launch.json
+meta.json
+*/meta.json
+
+*.memmap
+
 
 **/__pycache__/
 **/logs/**
