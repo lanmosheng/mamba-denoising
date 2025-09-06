@@ -113,6 +113,6 @@ strain/vase100K.obj
 strain/vase100K.obj
 strain/vase100K.obj
 dataset_s_i1/train1601/
-patches/
+train_patches/
 15 35 1
-0 1 0
+0 0 1

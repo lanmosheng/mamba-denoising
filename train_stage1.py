@@ -4,7 +4,7 @@ import os, time, math, random
 from typing import Optional
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0,1")
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128")
-
+from tqdm import tqdm
 import numpy as np
 import torch
 import torch.nn as nn
@@ -16,23 +16,23 @@ from torch.utils.tensorboard import SummaryWriter
 # =========================
 # 路径 & 实验输出
 # =========================
-DATASET_ROOT_TRAIN = "dataset_s_i1/train1001"
-DATASET_ROOT_DEV   = "dataset_s_i1/dev1001"
-PATCH_ROOT         = "patches"  # 若 S1FaceLoaderV2 内部使用 _resolve_patch_path，会用到
+DATASET_ROOT_TRAIN = "dataset_s_i1/train1601"
+DATASET_ROOT_DEV   = "dataset_s_i1/dev1601"
+PATCH_ROOT         = "train_patches"  # 若 S1FaceLoaderV2 内部使用 _resolve_patch_path，会用到
 META_TRAIN         = os.path.join(DATASET_ROOT_TRAIN, "meta.json")
 META_DEV           = os.path.join(DATASET_ROOT_DEV,   "meta.json")
 
-OUT_NAME           = "s1_mamba_face"
+OUT_NAME           = "s1_mamba_face_1601"
 OUT_DIR            = os.path.join("out", OUT_NAME)
 APPEND_LOGS        = True  # 追加日志而不是覆盖
 
 # =========================
 # 训练超参（S1）
 # =========================
-EPOCHS            = 30
-BATCH_SIZE_TRAIN  = 256
-BATCH_SIZE_DEV    = 512
-LR                = 1e-3
+EPOCHS            = 100
+BATCH_SIZE_TRAIN  = 240
+BATCH_SIZE_DEV    = 240
+LR                = 1e-4
 WEIGHT_DECAY      = 0.0
 GRAD_CLIP_NORM    = 1.0   # None 关闭
 
@@ -84,21 +84,31 @@ def get_out_dir() -> str:
     return OUT_DIR
 
 # ============== 训练/验证 ==============
-def train_one_epoch(model: nn.Module, optimizer, loader: S1FaceLoaderV2, epoch: int,
-                    logger: Optional[SummaryWriter], grad_clip_norm: Optional[float]) -> float:
+def train_one_epoch(model, optimizer, loader, epoch, logger, grad_clip_norm):
     model.train()
     loader.set_epoch(epoch)
-
+    total_batches = loader.total_batches()
+    refresh_every = max(1, total_batches // 100)
     total_loss, total_cnt = 0.0, 0
-    for batch in loader.iter_batches():
-        X = torch.from_numpy(batch['X']).to(DEVICE, non_blocking=True)  # (B,N,3)
-        Y = torch.from_numpy(batch['Y']).to(DEVICE, non_blocking=True)  # (B,3)
+    # 用 tqdm 包装 batch 生成器；total 不设也可以，tqdm 会动态推进
+    pbar = tqdm(
+        loader.iter_batches(),
+        total=(total_batches if total_batches > 0 else None),
+        desc=f"Epoch {epoch}",
+        unit="batch",
+        dynamic_ncols=True,
+        mininterval=0.5,
+        smoothing=0.1,
+    )
+
+    for step, batch in enumerate(pbar, 1):
+        X = torch.from_numpy(batch['X']).to(DEVICE, non_blocking=True)
+        Y = torch.from_numpy(batch['Y']).to(DEVICE, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        out = model(X)                         # FaceEncoder: (n_pred, feat)
+        out = model(X)
         n_pred = out[0] if isinstance(out, tuple) else out
 
-        # MSE（单位化）
         n_pred_n = F.normalize(n_pred, dim=-1)
         Y_n      = F.normalize(Y,      dim=-1)
         loss = F.mse_loss(n_pred_n, Y_n)
@@ -111,8 +121,13 @@ def train_one_epoch(model: nn.Module, optimizer, loader: S1FaceLoaderV2, epoch: 
         B = X.shape[0]
         total_loss += float(loss.detach().cpu()) * B
         total_cnt  += B
+
+        # 进度条上显示当前 loss（同时也可显示 lr）
+
         if logger is not None:
             logger.add_scalar("train_s1/mse", float(loss.detach().cpu()))
+
+    pbar.close()  
     return total_loss / max(1, total_cnt)
 
 @torch.no_grad()
@@ -208,15 +223,15 @@ def main():
     best_path   = os.path.join(out_dir, "stage1_best.pt")
     start_epoch = 0
     best_val = float('inf')
-    if os.path.exists(latest_path):
+    if os.path.exists(best_path):
         try:
-            obj = torch.load(latest_path, map_location='cpu')
+            obj = torch.load(best_path, map_location='cpu')
             (face_model.module if isinstance(face_model, nn.DataParallel) else face_model)\
                 .load_state_dict(obj['model'], strict=False)
             opt.load_state_dict(obj['optimizer'])
             start_epoch = int(obj.get('epoch', -1)) + 1
             best_val = float(obj.get('best_val', float('inf')))
-            log_print(f"[Resume] stage1_latest.pt from epoch {start_epoch}")
+            log_print(f"[Resume] stage1_best.pt from epoch {start_epoch}")
         except Exception as e:
             log_print(f"[Resume] skip ({e})")
 

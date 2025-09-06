@@ -9,6 +9,6 @@ strain/elephant.obj
 strain/octa-flower.obj
 strain/fandisk.obj
 dataset_s_i1/dev1601/
-patches/
+train_patches/
 0 4 1
 0 0 1

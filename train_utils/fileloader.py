@@ -4,6 +4,7 @@ import json
 from typing import Dict, List, Tuple, Optional
 import numpy as np
 import math
+import random
 # ----------------------------
 # Utility functions
 # ----------------------------
@@ -102,6 +103,7 @@ class S1FaceLoaderV2:
             raise RuntimeError(f"No mesh dirs with lsd.npy & gt.npy under '{dataset_root}'")
 
         self._records: List[Tuple[str, str, str, int]] = []  # (lsd_path, gt_path, patch_path, nfaces)
+
         for mdir in self.mesh_dirs:
             lsd_path = os.path.join(mdir, 'lsd.npy')
             gt_path  = os.path.join(mdir, 'gt.npy')
@@ -121,6 +123,7 @@ class S1FaceLoaderV2:
             nfaces = int(lsd.shape[0])
             self._records.append((lsd_path, gt_path, patch_path, nfaces))
 
+        self._mesh_order = list(range(len(self._records)))
         # ---- 每个 mesh 的打乱顺序与切片大小 ----
         self._mesh_patch_orders: List[np.ndarray] = []  # 打乱后的 patch 行号
         self._mesh_k: List[int] = []                   # 每个 mesh 的 patch 行数 K
@@ -148,6 +151,7 @@ class S1FaceLoaderV2:
     # ========== 公共接口 ==========
     def set_epoch(self, epoch: int):
         self._epoch = int(epoch)
+        random.shuffle(self._mesh_order)
 
     def iter_batches(self):
         """
@@ -159,7 +163,8 @@ class S1FaceLoaderV2:
         buf_X, buf_Y = [], []
         buf_mid, buf_fid, buf_cen, buf_row = [], [], [], []
 
-        for mi, (lsd_path, gt_path, patch_path, nfaces) in enumerate(self._records):
+        for mi in self._mesh_order:
+            lsd_path, gt_path, patch_path, nfaces = self._records[mi]
             lsd         = np.load(lsd_path, mmap_mode=self.mmap_mode)  # (nfaces, N, 3)
             gt          = np.load(gt_path,  mmap_mode=self.mmap_mode)  # (nfaces, 3)
             patch_faces = np.load(patch_path, mmap_mode=self.mmap_mode) # (K, M)
@@ -270,3 +275,24 @@ class S1FaceLoaderV2:
                       [vz, 0, -vx],
                       [-vy, vx, 0]], dtype=np.float64)
         return np.eye(3) + K * s + (K @ K) * ((1.0 - c) / (s * s + eps))
+    def total_batches(self) -> int:
+        """
+        返回“当前 epoch（已 set_epoch）”会产出的 batch 总数。
+        计算基于：每个 mesh 的切片大小 × patch_num（每行patch产出M个面样本） × batch_size。
+        """
+        total_samples = 0
+        for mi in range(len(self._records)):
+            k = self._mesh_k[mi]
+            slice_size = self._mesh_slice_size[mi]
+            slices_per_mesh = self._mesh_slices_per_mesh[mi]
+            sid = self._epoch % slices_per_mesh
+            beg = sid * slice_size
+            end = min(k, beg + slice_size)
+            chosen_rows = max(0, end - beg)
+            total_samples += chosen_rows * self.patch_num  # 每行patch产出 M 个“面”样本
+
+        bs = self.batch_size
+        if self.drop_last:
+            return int(total_samples // bs)
+        else:
+            return int((total_samples + bs - 1) // bs)
