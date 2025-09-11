@@ -18,3 +18,4 @@ This project is still in progress; a more detailed README will be posted upon co
   <img src="assets/teaser1.png" alt="Before" width="48%">
   <img src="assets/teaser2.png" alt="After" width="48%">
 </p>
+Note: Left is before denoising; right is after denoising.
